@@ -172,7 +172,7 @@ def geolocalizar_endereco(endereco):
 
 try:
     spreadsheet = conectar_sheets()
-    sheet = spreadsheet.get_worksheet(0) # Aba principal de endereços
+    sheet = spreadsheet.get_worksheet(0)
     todos_os_valores = sheet.get_all_values()
 
     if len(todos_os_valores) > 1:
@@ -188,8 +188,10 @@ try:
     if "Status" not in df.columns:
         df["Status"] = "Pendente"
     df["Status"] = (
-        df["Status"].astype(str).replace(["", "nan", "None"], "Pendente")
+        df["Status"].astype(str).str.strip().replace(["", "nan", "None"], "Pendente")
     )
+    # Padroniza a primeira letra maiúscula para contagens precisas
+    df["Status"] = df["Status"].str.capitalize()
 
     if "Bairro" in df.columns:
         df["Bairro"] = df["Bairro"].astype(str).str.strip()
@@ -246,7 +248,25 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     restantes = total_geral - concluidos
     pct_conclusao = (concluidos / total_geral * 100) if total_geral > 0 else 0.0
 
-    st.markdown("### 1. 🎯 Progresso Global de Auditorias")
+    # Contagens individuais para cada status
+    qtd_auditado = len(df[df["Status"] == "Auditado"])
+    qtd_pendente = len(df[df["Status"] == "Pendente"])
+    qtd_cancelado = len(df[df["Status"] == "Cancelado"])
+    qtd_justificado = len(df[df["Status"] == "Justificado"])
+
+    st.markdown("### 1. 📌 Detalhamento por Status Atual")
+    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+    with col_s1:
+        st.metric(label="🟢 Auditados", value=f"{qtd_auditado:,}".replace(",", "."))
+    with col_s2:
+        st.metric(label="🟡 Pendentes", value=f"{qtd_pendente:,}".replace(",", "."))
+    with col_s3:
+        st.metric(label="🔴 Cancelados", value=f"{qtd_cancelado:,}".replace(",", "."))
+    with col_s4:
+        st.metric(label="🔵 Justificados", value=f"{qtd_justificado:,}".replace(",", "."))
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("### 2. 🎯 Progresso Global de Auditorias")
     st.progress(pct_conclusao / 100)
     st.caption(f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado")
 
@@ -264,7 +284,7 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         st.metric(label="🎯 Progresso Global", value=f"{pct_conclusao:.1f}%")
 
     st.markdown("---")
-    st.markdown("### 2. 📊 Progresso por Bairro")
+    st.markdown("### 3. 📊 Progresso por Bairro")
 
     df_barras = df.copy()
     df_barras["Situacao"] = df_barras["Status"].apply(
@@ -319,7 +339,6 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
         </div>
     """, unsafe_allow_html=True)
 
-    # Centralizado em Florianópolis
     mapa_floripa = folium.Map(location=[-27.5954, -48.5480], zoom_start=12, control_scale=True)
 
     def obter_cor_marcador(status):
@@ -438,7 +457,7 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
             n_est = st.text_input("Estado", value=str(dados.get("Estado", "SC")))
             n_cep = st.text_input("CEP", value=str(dados.get("CEP", "")))
             
-            st_atual = str(dados["Status"]).strip()
+            st_atual = str(dados["Status"]).strip().capitalize()
             idx_st = LISTA_STATUS.index(st_atual) if st_atual in LISTA_STATUS else 0
             n_st = st.selectbox("Status", LISTA_STATUS, index=idx_st)
             

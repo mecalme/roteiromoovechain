@@ -1,50 +1,66 @@
 import streamlit as st
 import pandas as pd
 import gspread
-# (e as outras bibliotecas que seu app já usa...)
+from oauth2client.service_account import ServiceAccountCredentials
 
-# 1. Configuração da página para ocupar a tela toda (fica mais profissional)
+# 1. Configuração inicial da página em modo expandido
 st.set_page_config(page_title="Roteiro Moovechain", page_icon="📍", layout="wide")
 
-# 2. Sua função de conexão com o Google Sheets (aquela que já configuramos)
+# 2. Conexão com o Google Sheets
+@st.cache_resource
 def conectar_sheets():
-    # ... código de conexão ...
-    pass
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    
+    if "gcp_service_account" in st.secrets:
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    else:
+        creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+        
+    client = gspread.authorize(creds)
+    sheet = client.open_by_key("12sENMxX1FoQ6KYNgnlnXzD3abDqO4VH_jypcB-nQGks").sheet1
+    return sheet
 
-# Carrega os dados da planilha
-sheet = conectar_sheets()
-dados = pd.DataFrame(sheet.get_all_records())
+# Carrega os dados da planilha de forma segura
+try:
+    sheet = conectar_sheets()
+    dados = pd.DataFrame(sheet.get_all_records())
+except Exception as e:
+    st.error(f"Erro ao carregar os dados da planilha: {e}")
+    st.stop()
 
-# ==========================================
-# 3. AQUI ENTRA A MÁGICA: O PAINEL DE MÉTRICAS (KPIs)
-# ==========================================
+# 3. Cabeçalho e Indicadores de Progresso (KPIs)
 st.title("📍 Roteiro e Progresso de Auditorias - Moovechain")
 
-# Exemplo de cálculo com base nos seus dados (ajuste os nomes das colunas conforme a sua planilha)
 total_pontos = len(dados)
-# Supondo que você tenha uma coluna chamada 'Status' e que 'Concluído' seja o valor final:
-concluidos = len(dados[dados['Status'] == 'Concluído']) if 'Status' in dados.columns else 0
+# Se houver uma coluna de status, calcula os concluídos. Caso contrário, assume 0.
+if 'Status' in dados.columns:
+    concluidos = len(dados[dados['Status'] == 'Concluído'])
+else:
+    concluidos = 0
+
 porcentagem = int((concluidos / total_pontos) * 100) if total_pontos > 0 else 0
 
-# Mostra os cartões de métricas lado a lado no topo da tela
+# Exibe os cartões de métricas no topo
 col1, col2, col3 = st.columns(3)
 col1.metric(label="📊 Total de Pontos Mapeados", value=total_pontos)
 col2.metric(label="✅ Auditorias Realizadas", value=concluidos)
 col3.metric(label="🚀 Avanço Total", value=f"{porcentagem}%")
 
-st.markdown("---") # Linha divisória bonita
+st.markdown("---")
 
-# ==========================================
-# 4. ABAS PARA ORGANIZAR O MAPA E OS DADOS
-# ==========================================
-aba_mapa, aba_tabela = st.tabs(["🗺️ Mapa de Progresso", "📋 Tabela de Dados"])
+# 4. Abas para organizar a visualização
+aba_mapa, aba_tabela = st.tabs(["🗺️ Mapa e Rotas", "📋 Tabela de Dados"])
 
 with aba_mapa:
-    st.subheader("Visualização Geográfica do Avanço")
-    # AQUI VOCÊ COLA O CÓDIGO DO SEU MAPA ATUAL (ex: Plotly ou Pydeck)
-    # Exemplo: st.plotly_chart(seu_mapa)
-    st.info("Aqui fica o seu mapa interativo destacando os pontos concluídos e pendentes.")
+    st.subheader("Visualização dos Pontos de Auditoria")
+    # Se você já tiver o código do seu mapa antigo funcionando, cole ele aqui embaixo:
+    # st.map(dados) ou o seu gráfico Plotly/Pydeck
+    st.dataframe(dados, use_container_width=True)
 
 with aba_tabela:
-    st.subheader("Dados Detalhados da Planilha")
-    st.dataframe(dados) # Mostra a tabela interativa do Google Sheets
+    st.subheader("Planilha Completa")
+    st.dataframe(dados, use_container_width=True)

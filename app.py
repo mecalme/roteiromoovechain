@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 from geopy.geocoders import Nominatim
 import plotly.express as px
-from datetime import date, datetime
+from datetime import date
 import folium
 from streamlit_folium import st_folium
 
@@ -199,15 +199,6 @@ try:
     if "Destinatário" in df.columns:
         df["Destinatário"] = df["Destinatário"].astype(str).str.strip()
 
-    # Tratamento de Data caso exista coluna correspondente
-    colunas_data_possiveis = [c for c in df.columns if "data" in c.lower()]
-    col_data_nome = colunas_data_possiveis[0] if colunas_data_possiveis else None
-    
-    if col_data_nome:
-        df["_Data_Parsed"] = pd.to_datetime(df[col_data_nome], errors="coerce", dayfirst=True).dt.date
-    else:
-        df["_Data_Parsed"] = pd.NaT
-
     df["Identificador_Unico"] = df.apply(
         lambda r: f"Linha {r['_linha_sheets']} | {r['Destinatário']} ({r.get('Bairro', '')} - {r.get('Rua', '')})",
         axis=1
@@ -242,35 +233,6 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     st.subheader("📊 Dashboard Auditorias MooveChain")
     st.markdown("---")
 
-    # --- FILTRO POR RANGO DE DATAS NO TOPO ---
-    if col_data_nome and not df["_Data_Parsed"].dropna().empty:
-        min_data_disp = df["_Data_Parsed"].min()
-        max_data_disp = df["_Data_Parsed"].max()
-
-        st.markdown("##### 📅 Filtro por Período")
-        col_f1, col_f2, col_f3 = st.columns([2, 2, 2])
-        with col_f1:
-            data_inicial_filtro = st.date_input("Data Inicial", value=min_data_disp, min_value=min_data_disp, max_value=max_data_disp)
-        with col_f2:
-            data_final_filtro = st.date_input("Data Final", value=max_data_disp, min_value=min_data_disp, max_value=max_data_disp)
-        with col_f3:
-            st.markdown("<br>", unsafe_allow_html=True)
-            aplicar_filtro = st.checkbox("Ativar Intervalo", value=True)
-        
-        st.markdown("---")
-    else:
-        aplicar_filtro = False
-        data_inicial_filtro = None
-        data_final_filtro = None
-
-    # Filtragem do DataFrame com base nas datas selecionadas
-    df_dashboard = df.copy()
-    if aplicar_filtro and col_data_nome and data_inicial_filtro and data_final_filtro:
-        df_dashboard = df_dashboard[
-            (df_dashboard["_Data_Parsed"] >= data_inicial_filtro) & 
-            (df_dashboard["_Data_Parsed"] <= data_final_filtro)
-        ]
-
     status_padrao = ["Auditado", "Cancelado", "Justificado"]
     status_medicao = st.multiselect(
         "⚙️ Status considerados como Concluídos:",
@@ -279,8 +241,8 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         help="Escolha quais status representam uma visita/medição finalizada."
     )
 
-    total_geral = len(df_dashboard)
-    df_concluidos = df_dashboard[df_dashboard["Status"].isin(status_medicao)]
+    total_geral = len(df)
+    df_concluidos = df[df["Status"].isin(status_medicao)]
     concluidos = len(df_concluidos)
     restantes = total_geral - concluidos
     pct_conclusao = (concluidos / total_geral * 100) if total_geral > 0 else 0.0
@@ -288,7 +250,7 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     # 1. PROGRESSO GLOBAL NO PRIMEIRO LUGAR
     st.markdown("### 1. 🎯 Progresso Global de Auditorias")
     st.progress(pct_conclusao / 100)
-    st.caption(f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado no período")
+    st.caption(f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -306,10 +268,10 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     st.markdown("---")
 
     # Contagens individuais para cada status
-    qtd_auditado = len(df_dashboard[df_dashboard["Status"] == "Auditado"])
-    qtd_pendente = len(df_dashboard[df_dashboard["Status"] == "Pendente"])
-    qtd_cancelado = len(df_dashboard[df_dashboard["Status"] == "Cancelado"])
-    qtd_justificado = len(df_dashboard[df_dashboard["Status"] == "Justificado"])
+    qtd_auditado = len(df[df["Status"] == "Auditado"])
+    qtd_pendente = len(df[df["Status"] == "Pendente"])
+    qtd_cancelado = len(df[df["Status"] == "Cancelado"])
+    qtd_justificado = len(df[df["Status"] == "Justificado"])
 
     st.markdown("### 2. 📌 Detalhamento por Status Atual")
     col_s1, col_s2, col_s3, col_s4 = st.columns(4)
@@ -325,7 +287,7 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     st.markdown("---")
     st.markdown("### 3. 📊 Progresso por Bairro")
 
-    df_barras = df_dashboard.copy()
+    df_barras = df.copy()
     df_barras["Situacao"] = df_barras["Status"].apply(
         lambda s: "Concluído" if s in status_medicao else "Pendente"
     )
@@ -359,7 +321,7 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         fig_stacked.update_layout(xaxis_tickangle=-45, height=450, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_stacked, use_container_width=True)
     else:
-        st.info("Nenhum dado encontrado para exibir no gráfico com os filtros aplicados.")
+        st.info("Nenhum dado encontrado para exibir no gráfico.")
 
 
 # --- ABA 2: MAPA INTERATIVO DINÂMICO (FOLIUM) ---
@@ -443,7 +405,7 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
         df_filtrado = df_filtrado[df_filtrado["Status"].astype(str) == status_sel]
 
     st.write(f"Exibindo **{len(df_filtrado)}** de **{len(df)}** registros.")
-    df_exibicao = df_filtrado.drop(columns=["_linha_sheets", "Identificador_Unico", "_Data_Parsed"], errors="ignore")
+    df_exibicao = df_filtrado.drop(columns=["_linha_sheets", "Identificador_Unico"], errors="ignore")
 
     event = st.dataframe(df_exibicao, use_container_width=True, on_select="rerun", selection_mode="single-row", key="tabela_destinatarios")
     rows_selecionadas = event.selection.get("rows", [])

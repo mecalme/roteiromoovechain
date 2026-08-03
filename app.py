@@ -34,15 +34,23 @@ if "destinatario_para_editar" not in st.session_state:
 if "mensagem_sucesso_edicao" not in st.session_state:
     st.session_state["mensagem_sucesso_edicao"] = None
 
+import json
 
 def conectar_sheets():
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        "credentials.json", scope
-    )
+    
+    # Verifica se estamos rodando na nuvem do Streamlit (usando Secrets)
+    if "gcp_service_account" in st.secrets:
+        # Pega as credenciais direto da memória segura do Streamlit Cloud
+        creds_dict = dict(st.secrets["gcp_service_account"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+    else:
+        # Se estiver rodando localmente no seu PC, continua lendo o arquivo credentials.json
+        creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
+        
     client = gspread.authorize(creds)
     sheet = client.open_by_key(
         "12sENMxX1FoQ6KYNgnlnXzD3abDqO4VH_jypcB-nQGks"

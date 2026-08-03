@@ -8,8 +8,16 @@ import plotly.express as px
 from datetime import date
 
 LISTA_STATUS = ["Pendente", "Auditado", "Cancelado", "Justificado"]
-CATEGORIAS_MANUTENCAO = ["Troca de Óleo / Azeite", "Motor", "Pneus", "Relação / Transmissão", "Freios", "Elétrica", "Outros"]
-TIPOS_VEICULO = ["Carro", "Moto"]
+TIPOS_REGISTRO = [
+    "Abastecimento", 
+    "Troca de Óleo", 
+    "troca de Óleo + filtro", 
+    "Pneus", 
+    "Reparo no Motor", 
+    "Filtro de Combustível (+1)", 
+    "Filtro de Óleo (+1)", 
+    "Outros"
+]
 
 st.set_page_config(
     page_title="Roteiro MooveChain Florianópolis",
@@ -198,12 +206,11 @@ except Exception as e:
     st.stop()
 
 
-# --- FUNÇÕES AUXILIARES DE FROTA E CUSTOS ---
 def obter_ou_criar_aba(nome_aba, cabecalho_padrao):
     try:
         aba = spreadsheet.worksheet(nome_aba)
     except gspread.exceptions.WorksheetNotFound:
-        aba = spreadsheet.add_worksheet(title=nome_aba, rows=100, cols=20)
+        aba = spreadsheet.add_worksheet(title=nome_aba, rows=100, cols=10)
         aba.append_row(cabecalho_padrao)
     return aba
 
@@ -238,45 +245,23 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     pct_conclusao = (concluidos / total_geral * 100) if total_geral > 0 else 0.0
 
     st.markdown("### 1. 🎯 Progresso Global de Auditorias")
-
     st.progress(pct_conclusao / 100)
     st.caption(f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
-
     with col_kpi1:
-        st.metric(
-            label="📍 Total Geral de Pontos",
-            value=f"{total_geral:,}".replace(",", ".")
-        )
-
+        st.metric(label="📍 Total Geral de Pontos", value=f"{total_geral:,}".replace(",", "."))
     with col_kpi2:
-        st.metric(
-            label="✅ Visitas Concluídas",
-            value=f"{concluidos:,}".replace(",", "."),
-            delta=f"{pct_conclusao:.1f}% do Total",
-            delta_color="normal"
-        )
-
+        st.metric(label="✅ Visitas Concluídas", value=f"{concluidos:,}".replace(",", "."), delta=f"{pct_conclusao:.1f}% do Total")
     with col_kpi3:
         pct_restante = (restantes / total_geral * 100) if total_geral > 0 else 0.0
-        st.metric(
-            label="⏳ Restantes / Pendentes",
-            value=f"{restantes:,}".replace(",", "."),
-            delta=f"-{pct_restante:.1f}% Restantes",
-            delta_color="inverse"
-        )
-
+        st.metric(label="⏳ Restantes / Pendentes", value=f"{restantes:,}".replace(",", "."), delta=f"-{pct_restante:.1f}% Restantes", delta_color="inverse")
     with col_kpi4:
-        st.metric(
-            label="🎯 Progresso Global",
-            value=f"{pct_conclusao:.1f}%"
-        )
+        st.metric(label="🎯 Progresso Global", value=f"{pct_conclusao:.1f}%")
 
     st.markdown("---")
-
     st.markdown("### 2. 📊 Progresso por Bairro")
 
     df_barras = df.copy()
@@ -310,50 +295,11 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
             barmode="stack",
             text="Quantidade"
         )
-        
-        fig_stacked.update_layout(
-            xaxis_tickangle=-45,
-            legend_title_text="Situação",
-            height=450,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
-        )
-        
+        fig_stacked.update_layout(xaxis_tickangle=-45, height=450, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_stacked, use_container_width=True)
-    else:
-        st.info("Nenhum dado disponível para exibir no gráfico.")
-
-    st.markdown("---")
-
-    # --- 3. MAPA DE CALOR POR BAIRRO (DENSIDADE) ---
-    st.markdown("### 3. 🔥 Mapa de Calor (Densidade de Pontos por Bairro)")
-    
-    df_calor = df.groupby("Bairro").size().reset_index(name="Total_Pontos")
-    df_calor = df_calor.sort_values(by="Total_Pontos", ascending=False)
-
-    if not df_calor.empty:
-        fig_heatmap = px.bar(
-            df_calor,
-            x="Bairro",
-            y="Total_Pontos",
-            color="Total_Pontos",
-            color_continuous_scale="Reds",
-            title="Concentração de Pontos de Auditoria por Bairro",
-            labels={"Bairro": "Bairro", "Total_Pontos": "Volume de Pontos"},
-            text="Total_Pontos"
-        )
-        fig_heatmap.update_layout(
-            xaxis_tickangle=-45,
-            height=400,
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)"
-        )
-        st.plotly_chart(fig_heatmap, use_container_width=True)
-    else:
-        st.info("Sem dados suficientes para o mapa de calor.")
 
 
-# --- ABA 2: MAPA GOOGLE MY MAPS + LEGENDA VISÍVEL NO TOPO ---
+# --- ABA 2: MAPA GOOGLE MY MAPS ---
 elif opcao == "🗺️ Visualizar Mapa de Pontos":
     st.subheader("🗺️ Mapa Google My Maps de Pontos")
     st.markdown("---")
@@ -372,81 +318,42 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
     """, unsafe_allow_html=True)
 
     MAP_EMBED_URL = "https://www.google.com/maps/d/embed?mid=1-eBhSz898WjsoX9JXQbYOb0t-3S3DHs&ehbc=2E312F"
-
-    st.components.v1.iframe(
-        src=MAP_EMBED_URL,
-        width=1300,
-        height=600,
-        scrolling=True
-    )
+    st.components.v1.iframe(src=MAP_EMBED_URL, width=1300, height=600, scrolling=True)
 
 
-# --- ABA 3: TABELA DE DADOS E AÇÕES (RESTRITO) ---
+# --- ABA 3: TABELA DE DADOS E AÇÕES ---
 elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:
     st.subheader("📋 Tabela de Destinatários e Rotas")
 
     col_bairro, col_dest, col_status = st.columns([1, 1.2, 0.8])
-    
     with col_bairro:
-        todos_bairros = sorted(
-            [str(b) for b in df["Bairro"].unique() if str(b).strip() != ""]
-        )
-        bairros_sel = st.multiselect(
-            "Filtrar por Bairro(s):",
-            options=todos_bairros,
-            default=[],
-            placeholder="Selecione bairro(s)..."
-        )
+        todos_bairros = sorted([str(b) for b in df["Bairro"].unique() if str(b).strip() != ""])
+        bairros_sel = st.multiselect("Filtrar por Bairro(s):", options=todos_bairros, default=[])
 
     df_filtrado = df.copy()
-
     if bairros_sel:
         df_filtrado = df_filtrado[df_filtrado["Bairro"].astype(str).isin(bairros_sel)]
 
     with col_dest:
-        todos_destinatarios = sorted(
-            [str(d) for d in df_filtrado["Destinatário"].unique() if str(d).strip() != ""]
-        )
-        destinatarios_sel = st.multiselect(
-            "Filtrar por Destinatário(s):",
-            options=todos_destinatarios,
-            default=[],
-            placeholder="Pesquise/selecione destinatário(s)..."
-        )
+        todos_destinatarios = sorted([str(d) for d in df_filtrado["Destinatário"].unique() if str(d).strip() != ""])
+        destinatarios_sel = st.multiselect("Filtrar por Destinatário(s):", options=todos_destinatarios, default=[])
 
     with col_status:
         status_sel = st.selectbox("Filtrar por Status:", ["Todos"] + LISTA_STATUS)
 
     if destinatarios_sel:
         df_filtrado = df_filtrado[df_filtrado["Destinatário"].astype(str).isin(destinatarios_sel)]
-
     if status_sel != "Todos":
         df_filtrado = df_filtrado[df_filtrado["Status"].astype(str) == status_sel]
 
-    df_filtrado["🚗 Navegar"] = df_filtrado.apply(
-        lambda r: f"https://www.google.com/maps/dir/?api=1&destination={r['Latitude']},{r['Longitude']}"
-        if pd.notnull(r['Latitude']) and str(r['Latitude']).strip() != "" else "",
-        axis=1
-    )
-
     st.write(f"Exibindo **{len(df_filtrado)}** de **{len(df)}** registros.")
-
     df_exibicao = df_filtrado.drop(columns=["_linha_sheets", "Identificador_Unico"], errors="ignore")
 
-    event = st.dataframe(
-        df_exibicao,
-        use_container_width=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        key="tabela_destinatarios"
-    )
-
+    event = st.dataframe(df_exibicao, use_container_width=True, on_select="rerun", selection_mode="single-row", key="tabela_destinatarios")
     rows_selecionadas = event.selection.get("rows", [])
 
     st.markdown("---")
-
     col_info, col_btn = st.columns([3, 1])
-
     if len(rows_selecionadas) > 0:
         idx_linha = rows_selecionadas[0]
         registro_selecionado = df_filtrado.iloc[idx_linha]
@@ -454,19 +361,15 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
 
         with col_info:
             st.success(f"📌 **Selecionado:** {registro_selecionado['Destinatário']} (Linha {registro_selecionado['_linha_sheets']} no Sheets)")
-        
         with col_btn:
             if st.button("✏️ Editar Registro Selecionado", type="primary", use_container_width=True):
                 st.session_state["destinatario_para_editar"] = id_unico
                 st.session_state["mensagem_sucesso_edicao"] = None
                 st.session_state["menu_selecionado"] = "✏️ Editar Registro Existente"
                 st.rerun()
-    else:
-        with col_info:
-            st.info("👆 Marque a caixinha de seleção na primeira coluna de uma linha para editar.")
 
 
-# --- ABA 4: EDITAR REGISTRO EXISTENTE (RESTRITO) ---
+# --- ABA 4: EDITAR REGISTRO EXISTENTE ---
 elif opcao == "✏️ Editar Registro Existente" and st.session_state["autenticado"]:
     st.subheader("✏️ Editar Registro na Planilha")
 
@@ -480,23 +383,15 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
 
     lista_identificadores = df["Identificador_Unico"].tolist()
     idx_default = 0
-
     if st.session_state["destinatario_para_editar"] in lista_identificadores:
         idx_default = lista_identificadores.index(st.session_state["destinatario_para_editar"])
 
-    dest_sel = st.selectbox(
-        "Selecione o Destinatário para editar:",
-        options=lista_identificadores,
-        index=idx_default,
-        key="select_destino_form_edit"
-    )
+    dest_sel = st.selectbox("Selecione o Destinatário para editar:", options=lista_identificadores, index=idx_default)
 
     if dest_sel:
         st.session_state["destinatario_para_editar"] = dest_sel
         dados = df[df["Identificador_Unico"] == dest_sel].iloc[0]
         linha_real = int(dados["_linha_sheets"])
-
-        st.info(f"📍 Editando Registro da **Linha {linha_real}** no Google Sheets: **{dados['Destinatário']}**")
 
         with st.form("f_edit"):
             n_dest = st.text_input("Destinatário", value=str(dados["Destinatário"]))
@@ -517,35 +412,20 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
             if st.form_submit_button("💾 Salvar Alterações na Planilha", type="primary"):
                 try:
                     n_end_comp = f"{n_rua}, {n_num} - {n_bairro}, {n_cid} - {n_est}, CEP {n_cep}, Brasil"
-
                     if not n_lat or not n_lng:
                         n_lat, n_lng = geolocalizar_endereco(n_end_comp)
 
-                    novos_valores = [
-                        n_dest,
-                        n_rua,
-                        n_num,
-                        n_bairro,
-                        n_cid,
-                        n_est,
-                        n_cep,
-                        n_end_comp,
-                        n_st,
-                        n_lat,
-                        n_lng
-                    ]
-                    
-                    intervalo = f"A{linha_real}:K{linha_real}"
-                    sheet.update(range_name=intervalo, values=[novos_valores])
+                    novos_valores = [n_dest, n_rua, n_num, n_bairro, n_cid, n_est, n_cep, n_end_comp, n_st, n_lat, n_lng]
+                    sheet.update(range_name=f"A{linha_real}:K{linha_real}", values=[novos_valores])
                     
                     st.cache_data.clear()
-                    st.session_state["mensagem_sucesso_edicao"] = f"✅ Alteração salva com sucesso! O registro de **{n_dest}** (Linha {linha_real}) foi atualizado no Google Sheets."
+                    st.session_state["mensagem_sucesso_edicao"] = f"✅ Alteração salva com sucesso para **{n_dest}**!"
                     st.rerun()
                 except Exception as err:
                     st.error(f"❌ Erro ao salvar na planilha: {err}")
 
 
-# --- ABA 5: ADICIONAR NOVO REGISTRO (RESTRITO) ---
+# --- ABA 5: ADICIONAR NOVO REGISTRO ---
 elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
     st.subheader("➕ Novo Registro")
     with st.form("f_novo"):
@@ -563,22 +443,7 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
                 try:
                     end_comp = f"{rua}, {num} - {bairro}, {cid} - {est}, CEP {cep}, Brasil"
                     lat, lng = geolocalizar_endereco(end_comp)
-
-                    sheet.append_row(
-                        [
-                            dest,
-                            rua,
-                            num,
-                            bairro,
-                            cid,
-                            est,
-                            cep,
-                            end_comp,
-                            st_novo,
-                            lat,
-                            lng
-                        ]
-                    )
+                    sheet.append_row([dest, rua, num, bairro, cid, est, cep, end_comp, st_novo, lat, lng])
                     st.success("✅ Novo destinatário adicionado ao Google Sheets!")
                     st.cache_data.clear()
                     st.rerun()
@@ -586,210 +451,161 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
                     st.error(f"❌ Erro ao cadastrar na planilha: {err}")
 
 
-# --- ABA 6: CUSTOS LOGÍSTICOS E FROTA (RESTRITO) ---
+# --- ABA 6: CUSTOS LOGÍSTICOS E FROTA (UNIFICADO COM A SUA PLANILHA) ---
 elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticado"]:
-    st.subheader("🚚 Gestão e Controle de Custos Logísticos da Frota")
+    st.subheader("🚚 Controle de Custos Logísticos (Abastecimentos e Manutenções)")
     st.markdown("---")
 
-    # Conectar ou criar abas específicas para custos
-    aba_veiculos = obter_ou_criar_aba("Frota_Veiculos", ["ID_Veiculo", "Tipo", "Marca_Modelo", "Ano", "Odometro_Atual"])
-    aba_abastecer = obter_ou_criar_aba("Frota_Abastecimentos", ["Data", "Veiculo", "Odometro_Km", "Litros", "Custo_Total", "Km_Litro"])
-    aba_manutencao = obter_ou_criar_aba("Frota_Manutencao", ["Data", "Veiculo", "Categoria", "Odometro_Km", "Custo", "Descricao"])
+    # Aba unificada no Google Sheets correspondente à imagem enviada
+    aba_custos = obter_ou_criar_aba("Controle_Custos", ["Data", "Tipo de Registro", "Local / Posto", "Odômetro (KM)", "Custo (R$)", "Litros"])
 
-    # Carregar dados atuais de frota
-    val_veiculos = aba_veiculos.get_all_values()
-    df_veiculos = pd.DataFrame(val_veiculos[1:], columns=val_veiculos[0]) if len(val_veiculos) > 1 else pd.DataFrame(columns=["ID_Veiculo", "Tipo", "Marca_Modelo", "Ano", "Odometro_Atual"])
+    val_custos = aba_custos.get_all_values()
+    if len(val_custos) > 1:
+        df_custos = pd.DataFrame(val_custos[1:], columns=val_custos[0])
+        df_custos["_linha_sheets"] = range(2, len(val_custos) + 1)
+    else:
+        df_custos = pd.DataFrame(columns=["Data", "Tipo de Registro", "Local / Posto", "Odômetro (KM)", "Custo (R$)", "Litros", "_linha_sheets"])
 
-    val_abast = aba_abastecer.get_all_values()
-    df_abast = pd.DataFrame(val_abast[1:], columns=val_abast[0]) if len(val_abast) > 1 else pd.DataFrame(columns=["Data", "Veiculo", "Odometro_Km", "Litros", "Custo_Total", "Km_Litro"])
-
-    val_manu = aba_manutencao.get_all_values()
-    df_manu = pd.DataFrame(val_manu[1:], columns=val_manu[0]) if len(val_manu) > 1 else pd.DataFrame(columns=["Data", "Veiculo", "Categoria", "Odometro_Km", "Custo", "Descricao"])
-
-    tab_frota, tab_abast, tab_manu, tab_relatorio = st.tabs([
-        "🚗 1. Cadastrar Veículos", 
-        "⛽ 2. Registrar Abastecimento", 
-        "🔧 3. Registrar Manutenção", 
-        "📊 4. Relatório e Indicadores"
+    tab_novo_lancamento, tab_editar_lancamento, tab_tabela_custos, tab_relatorio_custos = st.tabs([
+        "➕ Novo Lançamento", 
+        "✏️ Editar Lançamento", 
+        "📋 Tabela de Registros", 
+        "📊 Indicadores e Métricas"
     ])
 
-    # --- ABA 6.1: CADASTRAR VEÍCULOS ---
-    with tab_frota:
-        st.markdown("### Cadastrar Nova Unidade (Carro ou Moto)")
-        with st.form("form_cad_veiculo"):
-            f_tipo = st.selectbox("Tipo de Veículo", TIPOS_VEICULO)
-            f_modelo = st.text_input("Marca e Modelo (Ex: Honda CG 160 / Fiat Strada)")
-            f_ano = st.text_input("Ano (Ex: 2023)")
-            f_odometro = st.number_input("Odômetro Inicial / Atual (Km)", min_value=0, step=100)
+    # --- 6.1: NOVO LANÇAMENTO ---
+    with tab_novo_lancamento:
+        st.markdown("### Adicionar Novo Registro de Custo / Abastecimento")
+        with st.form("form_novo_custo"):
+            c_data = st.date_input("Data", value=date.today())
+            c_tipo = st.selectbox("Tipo de Registro", TIPOS_REGISTRO)
+            c_local = st.text_input("Local / Posto (Ex: Primos Pequeno Príncipe, Posto Ipiranga, Moto Moto)")
+            c_odometro = st.text_input("Odômetro (KM) (Ex: 925.690)")
+            c_custo = st.text_input("Custo (R$) (Ex: 45,09)")
+            c_litros = st.text_input("Litros (Deixar em branco se for manutenção)")
 
-            if st.form_submit_button("Cadastrar Veículo", type="primary"):
-                if f_modelo:
-                    id_v = f"{f_tipo} - {f_modelo} ({f_ano})"
-                    try:
-                        aba_veiculos.append_row([id_v, f_tipo, f_modelo, str(f_ano), str(f_odometro)])
-                        st.success(f"✅ Veículo **{id_v}** cadastrado com sucesso!")
-                        st.rerun()
-                    except Exception as err:
-                        st.error(f"Erro ao salvar veículo: {err}")
-                else:
-                    st.warning("Preencha o modelo do veículo.")
+            if st.form_submit_button("Salvar Registro", type="primary"):
+                try:
+                    aba_custos.append_row([
+                        str(c_data),
+                        c_tipo,
+                        c_local,
+                        c_odometro,
+                        c_custo,
+                        c_litros
+                    ])
+                    st.success("✅ Registro adicionado com sucesso ao Google Sheets!")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Erro ao salvar registro: {err}")
 
-        st.markdown("---")
-        st.markdown("### Frota Atualmente Cadastrada")
-        if not df_veiculos.empty:
-            st.dataframe(df_veiculos, use_container_width=True)
+    # --- 6.2: EDITAR LANÇAMENTO EXISTENTE ---
+    with tab_editar_lancamento:
+        st.markdown("### ✏️ Editar Lançamento Existente")
+        if not df_custos.empty:
+            df_custos["Identificador_Custo"] = df_custos.apply(
+                lambda r: f"Linha {r['_linha_sheets']} | {r['Data']} - {r['Tipo de Registro']} ({r['Local / Posto']} - {r['Odômetro (KM)']})", 
+                axis=1
+            )
+            
+            sel_custo_edit = st.selectbox("Selecione o registro que deseja alterar:", options=df_custos["Identificador_Custo"].tolist())
+            
+            if sel_custo_edit:
+                dados_c = df_custos[df_custos["Identificador_Custo"] == sel_custo_edit].iloc[0]
+                l_real = int(dados_c["_linha_sheets"])
+
+                with st.form("form_edicao_custo"):
+                    e_data = st.text_input("Data", value=str(dados_c["Data"]))
+                    
+                    t_atual = str(dados_c["Tipo de Registro"]).strip()
+                    idx_t = TIPOS_REGISTRO.index(t_atual) if t_atual in TIPOS_REGISTRO else 0
+                    e_tipo = st.selectbox("Tipo de Registro", TIPOS_REGISTRO, index=idx_t)
+                    
+                    e_local = st.text_input("Local / Posto", value=str(dados_c["Local / Posto"]))
+                    e_odometro = st.text_input("Odômetro (KM)", value=str(dados_c["Odômetro (KM)"]))
+                    e_custo = st.text_input("Custo (R$)", value=str(dados_c["Custo (R$)"]))
+                    e_litros = st.text_input("Litros", value=str(dados_c["Litros"]))
+
+                    if st.form_submit_button("💾 Salvar Alterações", type="primary"):
+                        try:
+                            novos_valores_custo = [e_data, e_tipo, e_local, e_odometro, e_custo, e_litros]
+                            aba_custos.update(range_name=f"A{l_real}:F{l_real}", values=[novos_valores_custo])
+                            st.success(f"✅ Registro da linha {l_real} atualizado com sucesso!")
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as err:
+                            st.error(f"❌ Erro ao atualizar o registro: {err}")
         else:
-            st.info("Nenhum veículo cadastrado até o momento.")
+            st.info("Nenhum registro encontrado para edição.")
 
-    # --- ABA 6.2: REGISTRAR ABASTECIMENTO ---
-    with tab_abast:
-        st.markdown("### Registro de Consumo de Combustível")
-        
-        if df_veiculos.empty:
-            st.warning("⚠️ Cadastre pelo menos um veículo na aba anterior antes de registrar abastecimentos.")
+    # --- 6.3: TABELA DE REGISTROS ---
+    with tab_tabela_custos:
+        st.markdown("### Histórico Completo de Lançamentos")
+        if not df_custos.empty:
+            st.dataframe(df_custos.drop(columns=["_linha_sheets", "Identificador_Custo"], errors="ignore"), use_container_width=True)
         else:
-            lista_ids_veiculos = df_veiculos["ID_Veiculo"].tolist()
-            with st.form("form_abastecimento"):
-                a_veiculo = st.selectbox("Selecione o Veículo", lista_ids_veiculos)
-                a_data = st.date_input("Data do Abastecimento", value=date.today())
-                a_odometro = st.number_input("Odômetro Atual no Painel (Km)", min_value=0, step=10)
-                a_litros = st.number_input("Quantidade de Litros", min_value=0.1, format="%.2f")
-                a_custo = st.number_input("Custo Total (R$)", min_value=0.01, format="%.2f")
+            st.info("Ainda não há registros na aba de custos.")
 
-                if st.form_submit_button("Salvar Abastecimento", type="primary"):
-                    try:
-                        # Buscar último odômetro registrado para calcular Km/Litro
-                        df_v_abast = df_abast[df_abast["Veiculo"] == a_veiculo]
-                        km_litro = 0.0
-                        if not df_v_abast.empty:
-                            ultimo_odometro = float(df_v_abast.iloc[-1]["Odometro_Km"])
-                            delta_km = a_odometro - ultimo_odometro
-                            if delta_km > 0 and a_litros > 0:
-                                km_litro = round(delta_km / a_litros, 2)
+    # --- 6.4: RELATÓRIO E INDICADORES (KM/LITRO E TROCA DE ÓLEO) ---
+    with tab_relatorio_custos:
+        st.markdown("### 📊 Indicadores de Consumo (Km/L) e Manutenção Preventiva")
 
-                        aba_abastecer.append_row([
-                            str(a_data),
-                            a_veiculo,
-                            str(a_odometro),
-                            str(a_litros),
-                            str(a_custo),
-                            str(km_litro)
-                        ])
-                        
-                        # Atualizar odômetro atual na tabela de veículos
-                        cell = aba_veiculos.find(a_veiculo)
-                        if cell:
-                            aba_veiculos.update_cell(cell.row, 5, str(a_odometro))
+        if not df_custos.empty:
+            df_analise = df_custos.copy()
+            # Limpeza e conversão de valores para cálculo
+            df_analise["Odometro_Clean"] = pd.to_numeric(df_analise["Odômetro (KM)"].astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False), errors="coerce")
+            
+            # Limpeza de custo para monetário
+            df_analise["Custo_Clean"] = pd.to_numeric(
+                df_analise["Custo (R$)"]
+                .astype(str)
+                .str.replace("R$", "", regex=False)
+                .str.replace(".", "", regex=False)
+                .str.replace(",", ".", regex=False)
+                .str.strip(), 
+                errors="coerce"
+            ).fillna(0)
 
-                        st.success(f"✅ Abastecimento registrado! Consumo calculado: **{km_litro} km/l**")
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as err:
-                        st.error(f"Erro ao registrar abastecimento: {err}")
+            df_analise["Litros_Clean"] = pd.to_numeric(
+                df_analise["Litros"]
+                .astype(str)
+                .str.replace(",", ".", regex=False)
+                .str.strip(), 
+                errors="coerce"
+            ).fillna(0)
 
-        st.markdown("---")
-        st.markdown("### Histórico de Abastecimentos")
-        if not df_abast.empty:
-            st.dataframe(df_abast, use_container_width=True)
-        else:
-            st.info("Nenhum abastecimento registrado.")
+            # Separação de Abastecimentos para cálculo de Km por Litro
+            df_abast_calc = df_analise[df_analise["Tipo de Registro"].str.contains("Abastecimento", case=False, na=False)].sort_values(by="Odometro_Clean")
 
-    # --- ABA 6.3: REGISTRAR MANUTENÇÃO ---
-    with tab_manu:
-        st.markdown("### Registro de Gastos com Manutenção (Peças e Serviços)")
-
-        if df_veiculos.empty:
-            st.warning("⚠️ Cadastre pelo menos um veículo na primeira aba antes de registrar manutenções.")
-        else:
-            lista_ids_veiculos = df_veiculos["ID_Veiculo"].tolist()
-            with st.form("form_manutencao"):
-                m_veiculo = st.selectbox("Selecione o Veículo", lista_ids_veiculos, key="m_veiculo_sel")
-                m_data = st.date_input("Data da Manutenção", value=date.today())
-                m_categoria = st.selectbox("Categoria do Gasto", CATEGORIAS_MANUTENCAO)
-                m_odometro = st.number_input("Odômetro no Momento do Serviço (Km)", min_value=0, step=10, key="m_odo")
-                m_custo = st.number_input("Custo Total (R$)", min_value=0.01, format="%.2f", key="m_custo_val")
-                m_desc = st.text_area("Descrição detalhada (Ex: Troca de óleo 10W40 e filtro)")
-
-                if st.form_submit_button("Salvar Manutenção", type="primary"):
-                    try:
-                        aba_manutencao.append_row([
-                            str(m_data),
-                            m_veiculo,
-                            m_categoria,
-                            str(m_odometro),
-                            str(m_custo),
-                            m_desc
-                        ])
-                        st.success("✅ Registro de manutenção salvo com sucesso!")
-                        st.cache_data.clear()
-                        st.rerun()
-                    except Exception as err:
-                        st.error(f"Erro ao registrar manutenção: {err}")
-
-        st.markdown("---")
-        st.markdown("### Histórico de Manutenções e Controle de Troca de Óleo")
-        if not df_manu.empty:
-            # Calcular km rodado desde a última manutenção por categoria / veículo
-            st.dataframe(df_manu, use_container_width=True)
-        else:
-            st.info("Nenhum registro de manutenção encontrado.")
-
-    # --- ABA 6.4: RELATÓRIO E INDICADORES ---
-    with tab_relatorio:
-        st.markdown("### 📊 Consolidado de Custos e Desempenho da Frota")
-
-        if not df_abast.empty or not df_manu.empty:
-            # Converter tipos numéricos para cálculos
-            if not df_abast.empty:
-                df_abast["Custo_Total"] = pd.to_numeric(df_abast["Custo_Total"], errors="coerce").fillna(0)
-                df_abast["Litros"] = pd.to_numeric(df_abast["Litros"], errors="coerce").fillna(0)
-                df_abast["Km_Litro"] = pd.to_numeric(df_abast["Km_Litro"], errors="coerce").fillna(0)
-
-            if not df_manu.empty:
-                df_manu["Custo"] = pd.to_numeric(df_manu["Custo"], errors="coerce").fillna(0)
-
-            total_gasto_combustivel = df_abast["Custo_Total"].sum() if not df_abast.empty else 0.0
-            total_gasto_manutencao = df_manu["Custo"].sum() if not df_manu.empty else 0.0
-            custo_total_geral = total_gasto_combustivel + total_gasto_manutencao
-
-            col_r1, col_r2, col_r3 = st.columns(3)
-            with col_r1:
-                st.metric("⛽ Gasto Total Combustível", f"R$ {total_gasto_combustivel:,.2f}")
-            with col_r2:
-                st.metric("🔧 Gasto Total Manutenção", f"R$ {total_gasto_manutencao:,.2f}")
-            with col_r3:
-                st.metric("💰 Custo Logístico Total", f"R$ {custo_total_geral:,.2f}")
-
-            st.markdown("---")
-            st.markdown("### 📈 Desempenho de Consumo Médio (Km/L) por Veículo")
-            if not df_abast.empty:
-                df_media_km = df_abast[df_abast["Km_Litro"] > 0].groupby("Veiculo")["Km_Litro"].mean().reset_index()
-                if not df_media_km.empty:
-                    fig_km = px.bar(
-                        df_media_km,
-                        x="Veiculo",
-                        y="Km_Litro",
-                        title="Média de Km por Litro (Eficiência de Consumo)",
-                        labels={"Veiculo": "Veículo", "Km_Litro": "Média Km/L"},
-                        color="Km_Litro",
-                        color_continuous_scale="Greens",
-                        text="Km_Litro"
-                    )
-                    st.plotly_chart(fig_km, use_container_width=True)
-                else:
-                    st.info("Adicione pelo menos dois abastecimentos sequenciais no mesmo veículo para calcular a média de km/l.")
-
-            st.markdown("---")
-            st.markdown("### 🛠️ Custos de Manutenção por Categoria")
-            if not df_manu.empty:
-                df_cat_manu = df_manu.groupby("Categoria")["Custo"].sum().reset_index()
-                fig_cat = px.pie(
-                    df_cat_manu,
-                    names="Categoria",
-                    values="Custo",
-                    title="Distribuição de Gastos com Manutenção",
-                    hole=0.4
+            if len(df_abast_calc) >= 2:
+                df_abast_calc["Delta_Km"] = df_abast_calc["Odometro_Clean"].diff()
+                df_abast_calc["Km_Por_Litro"] = df_abast_calc.apply(
+                    lambda r: round(r["Delta_Km"] / r["Litros_Clean"], 2) if r["Litros_Clean"] > 0 and r["Delta_Km"] > 0 else 0, 
+                    axis=1
                 )
-                st.plotly_chart(fig_cat, use_container_width=True)
+
+                media_geral_km_l = df_abast_calc[df_abast_calc["Km_Por_Litro"] > 0]["Km_Por_Litro"].mean()
+                st.metric("⛽ Consumo Médio Geral", f"{media_geral_km_l:.2f} km/l" if not pd.isna(media_geral_km_l) else "Calculando...")
+
+                st.markdown("#### Histórico Calculado de Consumo (Km/L por Abastecimento)")
+                st.dataframe(df_abast_calc[["Data", "Local / Posto", "Odômetro (KM)", "Litros", "Km_Por_Litro"]], use_container_width=True)
+            else:
+                st.info("Insira mais abastecimentos para calcular a média de km por litro.")
+
+            st.markdown("---")
+            st.markdown("#### 🛠️ Controle de Troca de Óleo por KM Rodado")
+            df_oleo = df_analise[df_analise["Tipo de Registro"].str.contains("Óleo|oleo", case=False, na=False)].sort_values(by="Odometro_Clean")
+            if not df_oleo.empty:
+                st.dataframe(df_oleo[["Data", "Tipo de Registro", "Local / Posto", "Odômetro (KM)", "Custo (R$)"]], use_container_width=True)
+                
+                ultimo_oleo = df_oleo.iloc[-1]["Odometro_Clean"]
+                odometro_atual_geral = df_analise["Odometro_Clean"].max()
+                
+                if not pd.isna(ultimo_oleo) and not pd.isna(odometro_atual_geral):
+                    km_desde_troca = odometro_atual_geral - ultimo_oleo
+                    st.metric("🔧 Quilometragem rodada desde a última troca de óleo", f"{km_desde_troca:,.0f} km".replace(",", "."))
+            else:
+                st.info("Nenhum registro de troca de óleo encontrado para realizar o comparativo.")
         else:
-            st.info("Registre alguns dados de abastecimento e manutenção para visualizar os indicadores financeiros.")
+            st.info("Adicione registros na aba de custos para visualizar os relatórios.")

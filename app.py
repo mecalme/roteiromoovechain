@@ -14,27 +14,51 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- ESTILIZAÇÃO CSS CUSTOMIZADA (Tema Azul Suave, Branco e Verde Corporativo) ---
+# --- ESTILIZAÇÃO CSS CUSTOMIZADA (Menu Azul Corporativo + Fundo Suave + Verde de Destaque) ---
 st.markdown("""
     <style>
-    /* Cor de fundo geral da página (Azul-acinzentado bem suave da referência) */
+    /* Cor de fundo geral da página */
     .stApp {
         background-color: #f0f4f8;
         color: #102a43;
     }
     
-    /* Estilização da Barra Lateral (Sidebar) */
+    /* Estilização da Barra Lateral (Sidebar) em Azul Corporativo */
     [data-testid="stSidebar"] {
-        background-color: #e2e8f0;
-        border-right: 1px solid #cbd5e1;
+        background-color: #1e3a8a;
+        border-right: 1px solid #1e40af;
     }
     
-    /* Textos e títulos na sidebar e no app */
-    h1, h2, h3, h4, h5, h6, span, p, label {
+    /* Textos dentro da barra lateral (ficarão brancos para contraste) */
+    [data-testid="stSidebar"] h1, 
+    [data-testid="stSidebar"] h2, 
+    [data-testid="stSidebar"] h3, 
+    [data-testid="stSidebar"] span, 
+    [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] label {
+        color: #ffffff !important;
+    }
+    
+    /* Textos principais fora da sidebar */
+    h1, h2, h3, h4, h5, h6 {
         color: #0f172a !important;
     }
     
-    /* Botões principais com destaque em Verde Corporativo */
+    /* Botões do menu lateral (padrão e selecionado) */
+    [data-testid="stSidebar"] .stButton>button {
+        background-color: #2563eb !important;
+        color: white !important;
+        border-radius: 6px;
+        font-weight: 600;
+        border: 1px solid #3b82f6;
+    }
+    
+    [data-testid="stSidebar"] .stButton>button:hover {
+        background-color: #1d4ed8 !important;
+        color: white !important;
+    }
+    
+    /* Botões principais no corpo do app com destaque em Verde Corporativo */
     .stButton>button, div.stFormSubmitButton>button {
         background-color: #10b981 !important;
         color: white !important;
@@ -147,13 +171,12 @@ except Exception as e:
     st.stop()
 
 
-# --- MENU LATERAL EM ESTILO LISTA MINIMALISTA ---
+# --- MENU LATERAL EM ESTILO LISTA (AZUL CORPORATIVO) ---
 st.sidebar.markdown("### Navegação")
 for op in OPCOES_MENU:
-    # Destaca visualmente o item selecionado em verde/azul
     is_selected = st.session_state["menu_selecionado"] == op
-    button_type = "primary" if is_selected else "secondary"
     
+    # Destaca o botão selecionado de forma visual na barra lateral azul
     if st.sidebar.button(op, use_container_width=True, key=f"menu_btn_{op}"):
         st.session_state["menu_selecionado"] = op
         st.rerun()
@@ -324,7 +347,6 @@ elif opcao == "📋 Tabela de Dados e Ações":
     if status_sel != "Todos":
         df_filtrado = df_filtrado[df_filtrado["Status"].astype(str) == status_sel]
 
-    # Adiciona coluna com link rápido de navegação para o Google Maps
     df_filtrado["🚗 Navegar"] = df_filtrado.apply(
         lambda r: f"https://www.google.com/maps/dir/?api=1&destination={r['Latitude']},{r['Longitude']}"
         if pd.notnull(r['Latitude']) and str(r['Latitude']).strip() != "" else "",

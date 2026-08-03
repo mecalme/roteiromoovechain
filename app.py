@@ -309,6 +309,35 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     else:
         st.info("Nenhum dado disponível para exibir no gráfico.")
 
+    st.markdown("---")
+
+    # --- 3. MAPA DE CALOR POR BAIRRO (DENSIDADE) ---
+    st.markdown("### 3. 🔥 Mapa de Calor (Densidade de Pontos por Bairro)")
+    
+    df_calor = df.groupby("Bairro").size().reset_index(name="Total_Pontos")
+    df_calor = df_calor.sort_values(by="Total_Pontos", ascending=False)
+
+    if not df_calor.empty:
+        fig_heatmap = px.bar(
+            df_calor,
+            x="Bairro",
+            y="Total_Pontos",
+            color="Total_Pontos",
+            color_continuous_scale="Reds",
+            title="Concentração de Pontos de Auditoria por Bairro",
+            labels={"Bairro": "Bairro", "Total_Pontos": "Volume de Pontos"},
+            text="Total_Pontos"
+        )
+        fig_heatmap.update_layout(
+            xaxis_tickangle=-45,
+            height=400,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)"
+        )
+        st.plotly_chart(fig_heatmap, use_container_width=True)
+    else:
+        st.info("Sem dados suficientes para o mapa de calor.")
+
 
 # --- ABA 2: MAPA GOOGLE MY MAPS + LEGENDA VISÍVEL NO TOPO ---
 elif opcao == "🗺️ Visualizar Mapa de Pontos":
@@ -321,10 +350,10 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
             <h4 style="margin-top: 0; color: #1e3a8a !important;">📌 Legenda e Significado dos Alfinetes no Mapa</h4>
             <p style="margin-bottom: 12px; font-size: 14px;">Consulte abaixo o significado das cores dos marcadores exibidos no mapa interativo:</p>
             <ul style="list-style-type: none; padding-left: 0; display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 0;">
-                <li>🟢 <b>Verde:</b> Ponto Auditado (Visita/Auditoria concluída com sucesso)</li>
-                <li>🟡 <b>Amarelo / Laranja:</b> Ponto Pendente (Aguardando vistoria ou rota)</li>
-                <li>🔴 <b>Vermelho:</b> Ponto Cancelado (Visita cancelada ou inviável)</li>
-                <li>🔵 <b>Azul:</b> Ponto Justificado (Ocorrência informada / Justificativa registrada)</li>
+                <li>🟢 <b>Verde:</b> Auditado</li>
+                <li>🟡 <b>Amarelo / Laranja:</b> Pendente</li>
+                <li>🔴 <b>Vermelho:</b> Cancelado</li>
+                <li>🔵 <b>Azul:</b> Justificado</li>
             </ul>
         </div>
     """, unsafe_allow_html=True)

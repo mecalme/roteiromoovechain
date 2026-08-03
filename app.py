@@ -14,22 +14,17 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- ESTILIZAÇÃO CSS CUSTOMIZADA (Menu Azul Corporativo + Fundo Suave + Verde de Destaque) ---
+# --- ESTILIZAÇÃO CSS CUSTOMIZADA ---
 st.markdown("""
     <style>
-    /* Cor de fundo geral da página */
     .stApp {
         background-color: #f0f4f8;
         color: #102a43;
     }
-    
-    /* Estilização da Barra Lateral (Sidebar) em Azul Corporativo */
     [data-testid="stSidebar"] {
         background-color: #1e3a8a;
         border-right: 1px solid #1e40af;
     }
-    
-    /* Textos dentro da barra lateral (ficarão brancos para contraste) */
     [data-testid="stSidebar"] h1, 
     [data-testid="stSidebar"] h2, 
     [data-testid="stSidebar"] h3, 
@@ -38,13 +33,9 @@ st.markdown("""
     [data-testid="stSidebar"] label {
         color: #ffffff !important;
     }
-    
-    /* Textos principais fora da sidebar */
     h1, h2, h3, h4, h5, h6 {
         color: #0f172a !important;
     }
-    
-    /* Botões do menu lateral (padrão e selecionado) */
     [data-testid="stSidebar"] .stButton>button {
         background-color: #2563eb !important;
         color: white !important;
@@ -52,13 +43,10 @@ st.markdown("""
         font-weight: 600;
         border: 1px solid #3b82f6;
     }
-    
     [data-testid="stSidebar"] .stButton>button:hover {
         background-color: #1d4ed8 !important;
         color: white !important;
     }
-    
-    /* Botões principais no corpo do app com destaque em Verde Corporativo */
     .stButton>button, div.stFormSubmitButton>button {
         background-color: #10b981 !important;
         color: white !important;
@@ -66,13 +54,10 @@ st.markdown("""
         font-weight: 600;
         border: none;
     }
-    
     .stButton>button:hover, div.stFormSubmitButton>button:hover {
         background-color: #059669 !important;
         color: white !important;
     }
-    
-    /* Métricas e cartões com fundo branco para contraste */
     [data-testid="stMetric"] {
         background-color: #ffffff;
         padding: 15px;
@@ -85,16 +70,47 @@ st.markdown("""
 
 st.title("📍 Roteiro MooveChain - Florianópolis")
 
-# --- GERENCIAMENTO DE ESTADO ---
-OPCOES_MENU = [
-    "📊 Dashboard Auditorias MooveChain",
-    "🗺️ Visualizar Mapa de Pontos",
-    "📋 Tabela de Dados e Ações",
-    "✏️ Editar Registro Existente",
-    "➕ Adicionar Novo Registro",
-]
+# --- CONTROLE DE AUTENTICAÇÃO (ADMIN) ---
+if "autenticado" not in st.session_state:
+    st.session_state["autenticado"] = False
 
-if "menu_selecionado" not in st.session_state:
+st.sidebar.markdown("### 🔐 Acesso Administrativo")
+if not st.session_state["autenticado"]:
+    senha_digitada = st.sidebar.text_input("Senha do Administrador:", type="password")
+    if st.sidebar.button("Entrar", key="btn_login"):
+        # Define a senha (pode puxar dos Secrets do Streamlit ou deixar uma padrão segura aqui)
+        senha_correta = st.secrets.get("admin_password", "moovechain2026")
+        if senha_digitada == senha_correta:
+            st.session_state["autenticado"] = True
+            st.sidebar.success("✅ Acesso liberado!")
+            st.rerun()
+        else:
+            st.sidebar.error("❌ Senha incorreta.")
+else:
+    st.sidebar.success("👤 Modo Administrador Ativo")
+    if st.sidebar.button("Sair (Logout)", key="btn_logout"):
+        st.session_state["autenticado"] = False
+        st.rerun()
+
+st.sidebar.markdown("---")
+
+# --- GERENCIAMENTO DE ESTADO DO MENU ---
+# Se for Admin, vê todas as opções. Se for Público, vê apenas o Dashboard e o Mapa.
+if st.session_state["autenticado"]:
+    OPCOES_MENU = [
+        "📊 Dashboard Auditorias MooveChain",
+        "🗺️ Visualizar Mapa de Pontos",
+        "📋 Tabela de Dados e Ações",
+        "✏️ Editar Registro Existente",
+        "➕ Adicionar Novo Registro",
+    ]
+else:
+    OPCOES_MENU = [
+        "📊 Dashboard Auditorias MooveChain",
+        "🗺️ Visualizar Mapa de Pontos",
+    ]
+
+if "menu_selecionado" not in st.session_state or st.session_state["menu_selecionado"] not in OPCOES_MENU:
     st.session_state["menu_selecionado"] = OPCOES_MENU[0]
 
 if "destinatario_para_editar" not in st.session_state:
@@ -171,12 +187,9 @@ except Exception as e:
     st.stop()
 
 
-# --- MENU LATERAL EM ESTILO LISTA (AZUL CORPORATIVO) ---
+# --- MENU LATERAL EM ESTILO LISTA ---
 st.sidebar.markdown("### Navegação")
 for op in OPCOES_MENU:
-    is_selected = st.session_state["menu_selecionado"] == op
-    
-    # Destaca o botão selecionado de forma visual na barra lateral azul
     if st.sidebar.button(op, use_container_width=True, key=f"menu_btn_{op}"):
         st.session_state["menu_selecionado"] = op
         st.rerun()
@@ -305,8 +318,8 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
     )
 
 
-# --- ABA 3: TABELA DE DADOS E AÇÕES ---
-elif opcao == "📋 Tabela de Dados e Ações":
+# --- ABA 3: TABELA DE DADOS E AÇÕES (RESTRITO) ---
+elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:
     st.subheader("📋 Tabela de Destinatários e Rotas")
 
     col_bairro, col_dest, col_status = st.columns([1, 1.2, 0.8])
@@ -353,7 +366,7 @@ elif opcao == "📋 Tabela de Dados e Ações":
         axis=1
     )
 
-    st.write(f"Exibindo **{len(df_filtrado)}** de **{len(df)}** registros. Clique nos links da tabela para abrir a rota no Google Maps.")
+    st.write(f"Exibindo **{len(df_filtrado)}** de **{len(df)}** registros.")
 
     df_exibicao = df_filtrado.drop(columns=["_linha_sheets", "Identificador_Unico"], errors="ignore")
 
@@ -390,8 +403,8 @@ elif opcao == "📋 Tabela de Dados e Ações":
             st.info("👆 Marque a caixinha de seleção na primeira coluna de uma linha para editar.")
 
 
-# --- ABA 4: EDITAR REGISTRO EXISTENTE ---
-elif opcao == "✏️ Editar Registro Existente":
+# --- ABA 4: EDITAR REGISTRO EXISTENTE (RESTRITO) ---
+elif opcao == "✏️ Editar Registro Existente" and st.session_state["autenticado"]:
     st.subheader("✏️ Editar Registro na Planilha")
 
     if st.session_state.get("mensagem_sucesso_edicao"):
@@ -469,8 +482,8 @@ elif opcao == "✏️ Editar Registro Existente":
                     st.error(f"❌ Erro ao salvar na planilha: {err}")
 
 
-# --- ABA 5: ADICIONAR NOVO REGISTRO ---
-elif opcao == "➕ Adicionar Novo Registro":
+# --- ABA 5: ADICIONAR NOVO REGISTRO (RESTRITO) ---
+elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
     st.subheader("➕ Novo Registro")
     with st.form("f_novo"):
         dest = st.text_input("Destinatário")

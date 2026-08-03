@@ -237,35 +237,39 @@ for op in OPCOES_MENU:
 opcao = st.session_state["menu_selecionado"]
 
 
-# --- FILTRO LATERAL DE DATAS (APLICADO AO DASHBOARD) ---
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📅 Filtro por Período (Dashboard)")
-usar_filtro_data = st.sidebar.checkbox("Ativar Filtro de Data", value=False)
-
-data_inicial_filtro = None
-data_final_filtro = None
-
-if usar_filtro_data:
-    if col_data_nome:
-        data_inicial_filtro = st.sidebar.date_input("Data Inicial", value=date.today().replace(day=1))
-        data_final_filtro = st.sidebar.date_input("Data Final", value=date.today())
-    else:
-        st.sidebar.warning("⚠️ Não foi encontrada nenhuma coluna de 'Data' na planilha principal para aplicar o filtro.")
-
-
 # --- ABA 1: DASHBOARD AUDITORIAS MOOVECHAIN ---
 if opcao == "📊 Dashboard Auditorias MooveChain":
     st.subheader("📊 Dashboard Auditorias MooveChain")
     st.markdown("---")
 
-    # Filtragem do DataFrame com base nas datas selecionadas, se aplicável
+    # --- FILTRO POR RANGO DE DATAS NO TOPO ---
+    if col_data_nome and not df["_Data_Parsed"].dropna().empty:
+        min_data_disp = df["_Data_Parsed"].min()
+        max_data_disp = df["_Data_Parsed"].max()
+
+        st.markdown("##### 📅 Filtro por Período")
+        col_f1, col_f2, col_f3 = st.columns([2, 2, 2])
+        with col_f1:
+            data_inicial_filtro = st.date_input("Data Inicial", value=min_data_disp, min_value=min_data_disp, max_value=max_data_disp)
+        with col_f2:
+            data_final_filtro = st.date_input("Data Final", value=max_data_disp, min_value=min_data_disp, max_value=max_data_disp)
+        with col_f3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            aplicar_filtro = st.checkbox("Ativar Intervalo", value=True)
+        
+        st.markdown("---")
+    else:
+        aplicar_filtro = False
+        data_inicial_filtro = None
+        data_final_filtro = None
+
+    # Filtragem do DataFrame com base nas datas selecionadas
     df_dashboard = df.copy()
-    if usar_filtro_data and col_data_nome and data_inicial_filtro and data_final_filtro:
+    if aplicar_filtro and col_data_nome and data_inicial_filtro and data_final_filtro:
         df_dashboard = df_dashboard[
             (df_dashboard["_Data_Parsed"] >= data_inicial_filtro) & 
             (df_dashboard["_Data_Parsed"] <= data_final_filtro)
         ]
-        st.info(f"🔎 Exibindo dados filtrados de **{data_inicial_filtro.strftime('%d/%m/%Y')}** até **{data_final_filtro.strftime('%d/%m/%Y')}** ({len(df_dashboard)} registros encontrados).")
 
     status_padrao = ["Auditado", "Cancelado", "Justificado"]
     status_medicao = st.multiselect(

@@ -18,15 +18,15 @@ st.title("📍 Roteiro MooveChain - Florianópolis")
 
 # --- GERENCIAMENTO DE ESTADO ---
 OPCOES_MENU = [
+    "📊 Dashboard Auditorias MooveChain",  # <--- Movido para primeiro!
     "🗺️ Visualizar Mapa de Pontos",
     "📋 Tabela de Dados e Ações",
-    "📊 Dashboard Auditorias MooveChain",
     "✏️ Editar Registro Existente",
     "➕ Adicionar Novo Registro",
 ]
 
 if "menu_selecionado" not in st.session_state:
-    st.session_state["menu_selecionado"] = OPCOES_MENU[0]
+    st.session_state["menu_selecionado"] = OPCOES_MENU[0] # Começa direto no Dashboard
 
 if "destinatario_para_editar" not in st.session_state:
     st.session_state["destinatario_para_editar"] = None

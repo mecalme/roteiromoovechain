@@ -1,8 +1,0 @@
-streamlit
-gspread
-oauth2client
-pandas
-geopy
-plotly
-folium
-streamlit-folium

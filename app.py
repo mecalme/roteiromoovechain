@@ -6,6 +6,8 @@ import streamlit as st
 from geopy.geocoders import Nominatim
 import plotly.express as px
 from datetime import date
+import folium
+from streamlit_folium import st_folium
 
 LISTA_STATUS = ["Pendente", "Auditado", "Cancelado", "Justificado"]
 TIPOS_REGISTRO = [
@@ -299,9 +301,9 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         st.plotly_chart(fig_stacked, use_container_width=True)
 
 
-# --- ABA 2: MAPA GOOGLE MY MAPS ---
+# --- ABA 2: MAPA INTERATIVO DINÂMICO (FOLIUM) ---
 elif opcao == "🗺️ Visualizar Mapa de Pontos":
-    st.subheader("🗺️ Mapa Google My Maps de Pontos")
+    st.subheader("🗺️ Mapa Interativo de Pontos por Status")
     st.markdown("---")
 
     st.markdown("""
@@ -317,8 +319,42 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
         </div>
     """, unsafe_allow_html=True)
 
-    MAP_EMBED_URL = "https://www.google.com/maps/d/embed?mid=1-eBhSz898WjsoX9JXQbYOb0t-3S3DHs&ehbc=2E312F"
-    st.components.v1.iframe(src=MAP_EMBED_URL, width=1300, height=600, scrolling=True)
+    # Centralizado em Florianópolis
+    mapa_floripa = folium.Map(location=[-27.5954, -48.5480], zoom_start=12, control_scale=True)
+
+    def obter_cor_marcador(status):
+        status_limpo = str(status).strip().capitalize()
+        if status_limpo == "Auditado":
+            return "green"
+        elif status_limpo == "Pendente":
+            return "orange"
+        elif status_limpo == "Cancelado":
+            return "red"
+        elif status_limpo == "Justificado":
+            return "blue"
+        else:
+            return "gray"
+
+    for _, row in df.iterrows():
+        try:
+            lat = float(row["Latitude"])
+            lon = float(row["Longitude"])
+            status = row["Status"]
+            destinatario = row["Destinatário"]
+            bairro = row.get("Bairro", "Não informado")
+            
+            cor = obter_cor_marcador(status)
+            popup_html = f"<b>Destinatário:</b> {destinatario}<br><b>Bairro:</b> {bairro}<br><b>Status:</b> {status}"
+            
+            folium.Marker(
+                location=[lat, lon],
+                popup=folium.Popup(popup_html, max_width=300),
+                icon=folium.Icon(color=cor, icon="info-sign")
+            ).add_to(mapa_floripa)
+        except (ValueError, TypeError):
+            continue
+
+    st_folium(mapa_floripa, width=1300, height=600)
 
 
 # --- ABA 3: TABELA DE DADOS E AÇÕES ---
@@ -451,12 +487,11 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
                     st.error(f"❌ Erro ao cadastrar na planilha: {err}")
 
 
-# --- ABA 6: CUSTOS LOGÍSTICOS E FROTA (UNIFICADO COM A SUA PLANILHA) ---
+# --- ABA 6: CUSTOS LOGÍSTICOS E FROTA ---
 elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticado"]:
     st.subheader("🚚 Controle de Custos Logísticos (Abastecimentos e Manutenções)")
     st.markdown("---")
 
-    # Aba unificada no Google Sheets correspondente à imagem enviada
     aba_custos = obter_ou_criar_aba("Controle_Custos", ["Data", "Tipo de Registro", "Local / Posto", "Odômetro (KM)", "Custo (R$)", "Litros"])
 
     val_custos = aba_custos.get_all_values()
@@ -473,7 +508,6 @@ elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticad
         "📊 Indicadores e Métricas"
     ])
 
-    # --- 6.1: NOVO LANÇAMENTO ---
     with tab_novo_lancamento:
         st.markdown("### Adicionar Novo Registro de Custo / Abastecimento")
         with st.form("form_novo_custo"):
@@ -500,7 +534,6 @@ elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticad
                 except Exception as err:
                     st.error(f"Erro ao salvar registro: {err}")
 
-    # --- 6.2: EDITAR LANÇAMENTO EXISTENTE ---
     with tab_editar_lancamento:
         st.markdown("### ✏️ Editar Lançamento Existente")
         if not df_custos.empty:
@@ -539,7 +572,6 @@ elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticad
         else:
             st.info("Nenhum registro encontrado para edição.")
 
-    # --- 6.3: TABELA DE REGISTROS ---
     with tab_tabela_custos:
         st.markdown("### Histórico Completo de Lançamentos")
         if not df_custos.empty:
@@ -547,16 +579,13 @@ elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticad
         else:
             st.info("Ainda não há registros na aba de custos.")
 
-    # --- 6.4: RELATÓRIO E INDICADORES (KM/LITRO E TROCA DE ÓLEO) ---
     with tab_relatorio_custos:
         st.markdown("### 📊 Indicadores de Consumo (Km/L) e Manutenção Preventiva")
 
         if not df_custos.empty:
             df_analise = df_custos.copy()
-            # Limpeza e conversão de valores para cálculo
             df_analise["Odometro_Clean"] = pd.to_numeric(df_analise["Odômetro (KM)"].astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False), errors="coerce")
             
-            # Limpeza de custo para monetário
             df_analise["Custo_Clean"] = pd.to_numeric(
                 df_analise["Custo (R$)"]
                 .astype(str)
@@ -575,7 +604,6 @@ elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticad
                 errors="coerce"
             ).fillna(0)
 
-            # Separação de Abastecimentos para cálculo de Km por Litro
             df_abast_calc = df_analise[df_analise["Tipo de Registro"].str.contains("Abastecimento", case=False, na=False)].sort_values(by="Odometro_Clean")
 
             if len(df_abast_calc) >= 2:

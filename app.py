@@ -14,11 +14,56 @@ st.set_page_config(
     layout="wide",
 )
 
+# --- ESTILIZAÇÃO CSS CUSTOMIZADA (Tema Azul Suave, Branco e Verde Corporativo) ---
+st.markdown("""
+    <style>
+    /* Cor de fundo geral da página (Azul-acinzentado bem suave da referência) */
+    .stApp {
+        background-color: #f0f4f8;
+        color: #102a43;
+    }
+    
+    /* Estilização da Barra Lateral (Sidebar) */
+    [data-testid="stSidebar"] {
+        background-color: #e2e8f0;
+        border-right: 1px solid #cbd5e1;
+    }
+    
+    /* Textos e títulos na sidebar e no app */
+    h1, h2, h3, h4, h5, h6, span, p, label {
+        color: #0f172a !important;
+    }
+    
+    /* Botões principais com destaque em Verde Corporativo */
+    .stButton>button, div.stFormSubmitButton>button {
+        background-color: #10b981 !important;
+        color: white !important;
+        border-radius: 6px;
+        font-weight: 600;
+        border: none;
+    }
+    
+    .stButton>button:hover, div.stFormSubmitButton>button:hover {
+        background-color: #059669 !important;
+        color: white !important;
+    }
+    
+    /* Métricas e cartões com fundo branco para contraste */
+    [data-testid="stMetric"] {
+        background-color: #ffffff;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        border-left: 4px solid #10b981;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 st.title("📍 Roteiro MooveChain - Florianópolis")
 
 # --- GERENCIAMENTO DE ESTADO ---
 OPCOES_MENU = [
-    "📊 Dashboard Auditorias MooveChain",  # <--- Movido para primeiro!
+    "📊 Dashboard Auditorias MooveChain",
     "🗺️ Visualizar Mapa de Pontos",
     "📋 Tabela de Dados e Ações",
     "✏️ Editar Registro Existente",
@@ -26,7 +71,7 @@ OPCOES_MENU = [
 ]
 
 if "menu_selecionado" not in st.session_state:
-    st.session_state["menu_selecionado"] = OPCOES_MENU[0] # Começa direto no Dashboard
+    st.session_state["menu_selecionado"] = OPCOES_MENU[0]
 
 if "destinatario_para_editar" not in st.session_state:
     st.session_state["destinatario_para_editar"] = None
@@ -42,7 +87,6 @@ def conectar_sheets():
         "https://www.googleapis.com/auth/drive",
     ]
     
-    # Suporte dual: lê dos Secrets do Streamlit Cloud ou do arquivo local
     if "gcp_service_account" in st.secrets:
         creds_dict = dict(st.secrets["gcp_service_account"])
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
@@ -103,120 +147,22 @@ except Exception as e:
     st.stop()
 
 
-# --- MENU LATERAL SINCRONIZADO ---
-def mudar_aba():
-    st.session_state["menu_selecionado"] = st.session_state["menu_radio_widget"]
-
-opcao = st.sidebar.radio(
-    "Selecione uma opção:",
-    OPCOES_MENU,
-    index=OPCOES_MENU.index(st.session_state["menu_selecionado"]),
-    key="menu_radio_widget",
-    on_change=mudar_aba
-)
-
-
-# --- ABA 1: MAPA GOOGLE MY MAPS ---
-if st.session_state["menu_selecionado"] == "🗺️ Visualizar Mapa de Pontos":
-    st.subheader("🗺️ Mapa Google My Maps")
-    st.markdown("---")
-
-    MAP_EMBED_URL = "https://www.google.com/maps/d/embed?mid=1-eBhSz898WjsoX9JXQbYOb0t-3S3DHs&ehbc=2E312F"
-
-    st.components.v1.iframe(
-        src=MAP_EMBED_URL,
-        width=1300,
-        height=650,
-        scrolling=True
-    )
-
-
-# --- ABA 2: TABELA DE DADOS E AÇÕES ---
-elif st.session_state["menu_selecionado"] == "📋 Tabela de Dados e Ações":
-    st.subheader("📋 Tabela de Destinatários")
-
-    col_bairro, col_dest, col_status = st.columns([1, 1.2, 0.8])
+# --- MENU LATERAL EM ESTILO LISTA MINIMALISTA ---
+st.sidebar.markdown("### Navegação")
+for op in OPCOES_MENU:
+    # Destaca visualmente o item selecionado em verde/azul
+    is_selected = st.session_state["menu_selecionado"] == op
+    button_type = "primary" if is_selected else "secondary"
     
-    with col_bairro:
-        todos_bairros = sorted(
-            [str(b) for b in df["Bairro"].unique() if str(b).strip() != ""]
-        )
-        bairros_sel = st.multiselect(
-            "Filtrar por Bairro(s):",
-            options=todos_bairros,
-            default=[],
-            placeholder="Selecione bairro(s)..."
-        )
+    if st.sidebar.button(op, use_container_width=True, key=f"menu_btn_{op}"):
+        st.session_state["menu_selecionado"] = op
+        st.rerun()
 
-    df_filtrado = df.copy()
-
-    if bairros_sel:
-        df_filtrado = df_filtrado[df_filtrado["Bairro"].astype(str).isin(bairros_sel)]
-
-    with col_dest:
-        todos_destinatarios = sorted(
-            [str(d) for d in df_filtrado["Destinatário"].unique() if str(d).strip() != ""]
-        )
-        destinatarios_sel = st.multiselect(
-            "Filtrar por Destinatário(s):",
-            options=todos_destinatarios,
-            default=[],
-            placeholder="Pesquise/selecione destinatário(s)..."
-        )
-
-    with col_status:
-        status_sel = st.selectbox("Filtrar por Status:", ["Todos"] + LISTA_STATUS)
-
-    if destinatarios_sel:
-        df_filtrado = df_filtrado[df_filtrado["Destinatário"].astype(str).isin(destinatarios_sel)]
-
-    if status_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["Status"].astype(str) == status_sel]
-
-    st.write(f"Exibindo **{len(df_filtrado)}** de **{len(df)}** registros. *(Marque a caixinha da linha para selecionar para edição)*")
-
-    df_exibicao = df_filtrado.drop(columns=["_linha_sheets", "Identificador_Unico"], errors="ignore")
-
-    event = st.dataframe(
-        df_exibicao,
-        use_container_width=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        key="tabela_destinatarios"
-    )
-
-    rows_selecionadas = event.selection.get("rows", [])
-
-    st.markdown("---")
-
-    col_info, col_btn = st.columns([3, 1])
-
-    if len(rows_selecionadas) > 0:
-        idx_linha = rows_selecionadas[0]
-        registro_selecionado = df_filtrado.iloc[idx_linha]
-        id_unico = registro_selecionado["Identificador_Unico"]
-
-        with col_info:
-            st.success(f"📌 **Selecionado:** {registro_selecionado['Destinatário']} (Linha {registro_selecionado['_linha_sheets']} no Sheets)")
-        
-        with col_btn:
-            if st.button("✏️ Editar Registro Selecionado", type="primary", use_container_width=True):
-                st.session_state["destinatario_para_editar"] = id_unico
-                st.session_state["mensagem_sucesso_edicao"] = None
-                st.session_state["menu_selecionado"] = "✏️ Editar Registro Existente"
-                st.rerun()
-    else:
-        with col_info:
-            st.info("👆 Marque a caixinha de seleção na primeira coluna de uma linha para editar.")
-        with col_btn:
-            if st.button("✏️ Ir para Tela de Edição", type="secondary", use_container_width=True):
-                st.session_state["mensagem_sucesso_edicao"] = None
-                st.session_state["menu_selecionado"] = "✏️ Editar Registro Existente"
-                st.rerun()
+opcao = st.session_state["menu_selecionado"]
 
 
-# --- ABA 3: DASHBOARD AUDITORIAS MOOVECHAIN ---
-elif st.session_state["menu_selecionado"] == "📊 Dashboard Auditorias MooveChain":
+# --- ABA 1: DASHBOARD AUDITORIAS MOOVECHAIN ---
+if opcao == "📊 Dashboard Auditorias MooveChain":
     st.subheader("📊 Dashboard Auditorias MooveChain")
     st.markdown("---")
 
@@ -234,7 +180,7 @@ elif st.session_state["menu_selecionado"] == "📊 Dashboard Auditorias MooveCha
     restantes = total_geral - concluidos
     pct_conclusao = (concluidos / total_geral * 100) if total_geral > 0 else 0.0
 
-    st.markdown("### 1. 🎯 Avance Auditorias MooveChain")
+    st.markdown("### 1. 🎯 Progresso Global de Auditorias")
 
     st.progress(pct_conclusao / 100)
     st.caption(f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado")
@@ -274,7 +220,7 @@ elif st.session_state["menu_selecionado"] == "📊 Dashboard Auditorias MooveCha
 
     st.markdown("---")
 
-    st.markdown("### 2. 📊 Progresso de auditorias")
+    st.markdown("### 2. 📊 Progresso por Bairro")
 
     df_barras = df.copy()
     df_barras["Situacao"] = df_barras["Status"].apply(
@@ -302,7 +248,7 @@ elif st.session_state["menu_selecionado"] == "📊 Dashboard Auditorias MooveCha
             color="Situacao",
             title="Distribuição de Concluídos vs Pendentes por Bairro",
             labels={"Bairro": "Bairro", "Quantidade": "Qtd. de Pontos", "Situacao": "Status"},
-            color_discrete_map={"Concluído": "#2ca02c", "Pendente": "#ff7f0e"},
+            color_discrete_map={"Concluído": "#10b981", "Pendente": "#3b82f6"},
             category_orders={"Bairro": ordem_bairros, "Situacao": ["Concluído", "Pendente"]},
             barmode="stack",
             text="Quantidade"
@@ -311,63 +257,119 @@ elif st.session_state["menu_selecionado"] == "📊 Dashboard Auditorias MooveCha
         fig_stacked.update_layout(
             xaxis_tickangle=-45,
             legend_title_text="Situação",
-            height=450
+            height=450,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)"
         )
         
         st.plotly_chart(fig_stacked, use_container_width=True)
     else:
         st.info("Nenhum dado disponível para exibir no gráfico.")
 
+
+# --- ABA 2: MAPA GOOGLE MY MAPS ---
+elif opcao == "🗺️ Visualizar Mapa de Pontos":
+    st.subheader("🗺️ Mapa Google My Maps")
     st.markdown("---")
 
-    st.markdown("### 3. 🗺️ Mapa de calor")
-    st.markdown("Visualização geográfica centralizada em Florianópolis para otimização de trajetos em campo.")
+    MAP_EMBED_URL = "https://www.google.com/maps/d/embed?mid=1-eBhSz898WjsoX9JXQbYOb0t-3S3DHs&ehbc=2E312F"
 
-    df_mapa = df.copy()
-    df_mapa["Latitude"] = pd.to_numeric(df_mapa["Latitude"], errors="coerce")
-    df_mapa["Longitude"] = pd.to_numeric(df_mapa["Longitude"], errors="coerce")
-    df_mapa = df_mapa.dropna(subset=["Latitude", "Longitude"])
+    st.components.v1.iframe(
+        src=MAP_EMBED_URL,
+        width=1300,
+        height=650,
+        scrolling=True
+    )
 
-    df_mapa = df_mapa[
-        (df_mapa["Latitude"] >= -27.9) & (df_mapa["Latitude"] <= -27.3) &
-        (df_mapa["Longitude"] >= -48.7) & (df_mapa["Longitude"] <= -48.3)
-    ]
 
-    if not df_mapa.empty:
-        cores_status = {
-            "Auditado": "#2ca02c",
-            "Pendente": "#d62728",
-            "Justificado": "#ff7f0e",
-            "Cancelado": "#7f7f7f"
-        }
+# --- ABA 3: TABELA DE DADOS E AÇÕES ---
+elif opcao == "📋 Tabela de Dados e Ações":
+    st.subheader("📋 Tabela de Destinatários e Rotas")
 
-        fig_mapa = px.scatter_mapbox(
-            df_mapa,
-            lat="Latitude",
-            lon="Longitude",
-            color="Status",
-            hover_name="Destinatário",
-            hover_data=["Rua", "Numero", "Bairro"],
-            color_discrete_map=cores_status,
-            zoom=11.5,
-            center={"lat": -27.5954, "lon": -48.5480},
-            height=600,
-            title="Mapa de Pins - Florianópolis (Status de Auditoria)"
+    col_bairro, col_dest, col_status = st.columns([1, 1.2, 0.8])
+    
+    with col_bairro:
+        todos_bairros = sorted(
+            [str(b) for b in df["Bairro"].unique() if str(b).strip() != ""]
+        )
+        bairros_sel = st.multiselect(
+            "Filtrar por Bairro(s):",
+            options=todos_bairros,
+            default=[],
+            placeholder="Selecione bairro(s)..."
         )
 
-        fig_mapa.update_traces(marker=dict(size=12))
-        fig_mapa.update_layout(
-            mapbox_style="open-street-map",
-            margin={"r": 0, "t": 40, "l": 0, "b": 0}
+    df_filtrado = df.copy()
+
+    if bairros_sel:
+        df_filtrado = df_filtrado[df_filtrado["Bairro"].astype(str).isin(bairros_sel)]
+
+    with col_dest:
+        todos_destinatarios = sorted(
+            [str(d) for d in df_filtrado["Destinatário"].unique() if str(d).strip() != ""]
+        )
+        destinatarios_sel = st.multiselect(
+            "Filtrar por Destinatário(s):",
+            options=todos_destinatarios,
+            default=[],
+            placeholder="Pesquise/selecione destinatário(s)..."
         )
 
-        st.plotly_chart(fig_mapa, use_container_width=True)
+    with col_status:
+        status_sel = st.selectbox("Filtrar por Status:", ["Todos"] + LISTA_STATUS)
+
+    if destinatarios_sel:
+        df_filtrado = df_filtrado[df_filtrado["Destinatário"].astype(str).isin(destinatarios_sel)]
+
+    if status_sel != "Todos":
+        df_filtrado = df_filtrado[df_filtrado["Status"].astype(str) == status_sel]
+
+    # Adiciona coluna com link rápido de navegação para o Google Maps
+    df_filtrado["🚗 Navegar"] = df_filtrado.apply(
+        lambda r: f"https://www.google.com/maps/dir/?api=1&destination={r['Latitude']},{r['Longitude']}"
+        if pd.notnull(r['Latitude']) and str(r['Latitude']).strip() != "" else "",
+        axis=1
+    )
+
+    st.write(f"Exibindo **{len(df_filtrado)}** de **{len(df)}** registros. Clique nos links da tabela para abrir a rota no Google Maps.")
+
+    df_exibicao = df_filtrado.drop(columns=["_linha_sheets", "Identificador_Unico"], errors="ignore")
+
+    event = st.dataframe(
+        df_exibicao,
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="tabela_destinatarios"
+    )
+
+    rows_selecionadas = event.selection.get("rows", [])
+
+    st.markdown("---")
+
+    col_info, col_btn = st.columns([3, 1])
+
+    if len(rows_selecionadas) > 0:
+        idx_linha = rows_selecionadas[0]
+        registro_selecionado = df_filtrado.iloc[idx_linha]
+        id_unico = registro_selecionado["Identificador_Unico"]
+
+        with col_info:
+            st.success(f"📌 **Selecionado:** {registro_selecionado['Destinatário']} (Linha {registro_selecionado['_linha_sheets']} no Sheets)")
+        
+        with col_btn:
+            if st.button("✏️ Editar Registro Selecionado", type="primary", use_container_width=True):
+                st.session_state["destinatario_para_editar"] = id_unico
+                st.session_state["mensagem_sucesso_edicao"] = None
+                st.session_state["menu_selecionado"] = "✏️ Editar Registro Existente"
+                st.rerun()
     else:
-        st.warning("⚠️ Não foram encontrados pontos com coordenadas válidas dentro da região de Florianópolis.")
+        with col_info:
+            st.info("👆 Marque a caixinha de seleção na primeira coluna de uma linha para editar.")
 
 
 # --- ABA 4: EDITAR REGISTRO EXISTENTE ---
-elif st.session_state["menu_selecionado"] == "✏️ Editar Registro Existente":
+elif opcao == "✏️ Editar Registro Existente":
     st.subheader("✏️ Editar Registro na Planilha")
 
     if st.session_state.get("mensagem_sucesso_edicao"):
@@ -446,7 +448,7 @@ elif st.session_state["menu_selecionado"] == "✏️ Editar Registro Existente":
 
 
 # --- ABA 5: ADICIONAR NOVO REGISTRO ---
-elif st.session_state["menu_selecionado"] == "➕ Adicionar Novo Registro":
+elif opcao == "➕ Adicionar Novo Registro":
     st.subheader("➕ Novo Registro")
     with st.form("f_novo"):
         dest = st.text_input("Destinatário")

@@ -65,6 +65,15 @@ st.markdown("""
         box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         border-left: 4px solid #10b981;
     }
+    /* Estilo para a caixa da legenda do mapa */
+    .legenda-container {
+        background-color: #ffffff;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        margin-bottom: 20px;
+        border-left: 5px solid #2563eb;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -78,7 +87,6 @@ st.sidebar.markdown("### 🔐 Acesso Administrativo")
 if not st.session_state["autenticado"]:
     senha_digitada = st.sidebar.text_input("Senha do Administrador:", type="password")
     if st.sidebar.button("Entrar", key="btn_login"):
-        # Define a senha (pode puxar dos Secrets do Streamlit ou deixar uma padrão segura aqui)
         senha_correta = st.secrets.get("admin_password", "moovechain2026")
         if senha_digitada == senha_correta:
             st.session_state["autenticado"] = True
@@ -95,7 +103,6 @@ else:
 st.sidebar.markdown("---")
 
 # --- GERENCIAMENTO DE ESTADO DO MENU ---
-# Se for Admin, vê todas as opções. Se for Público, vê apenas o Dashboard e o Mapa.
 if st.session_state["autenticado"]:
     OPCOES_MENU = [
         "📊 Dashboard Auditorias MooveChain",
@@ -303,17 +310,31 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         st.info("Nenhum dado disponível para exibir no gráfico.")
 
 
-# --- ABA 2: MAPA GOOGLE MY MAPS ---
+# --- ABA 2: MAPA GOOGLE MY MAPS + LEGENDA VISÍVEL NO TOPO ---
 elif opcao == "🗺️ Visualizar Mapa de Pontos":
-    st.subheader("🗺️ Mapa Google My Maps")
+    st.subheader("🗺️ Mapa Google My Maps de Pontos")
     st.markdown("---")
+
+    # --- LEGENDA DOS ALFINETES ---
+    st.markdown("""
+        <div class="legenda-container">
+            <h4 style="margin-top: 0; color: #1e3a8a !important;">📌 Legenda e Significado dos Alfinetes no Mapa</h4>
+            <p style="margin-bottom: 12px; font-size: 14px;">Consulte abaixo o significado das cores dos marcadores exibidos no mapa interativo:</p>
+            <ul style="list-style-type: none; padding-left: 0; display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 0;">
+                <li>🟢 <b>Verde:</b> Ponto Auditado (Visita/Auditoria concluída com sucesso)</li>
+                <li>🟡 <b>Amarelo / Laranja:</b> Ponto Pendente (Aguardando vistoria ou rota)</li>
+                <li>🔴 <b>Vermelho:</b> Ponto Cancelado (Visita cancelada ou inviável)</li>
+                <li>🔵 <b>Azul:</b> Ponto Justificado (Ocorrência informada / Justificativa registrada)</li>
+            </ul>
+        </div>
+    """, unsafe_allow_html=True)
 
     MAP_EMBED_URL = "https://www.google.com/maps/d/embed?mid=1-eBhSz898WjsoX9JXQbYOb0t-3S3DHs&ehbc=2E312F"
 
     st.components.v1.iframe(
         src=MAP_EMBED_URL,
         width=1300,
-        height=650,
+        height=600,
         scrolling=True
     )
 

@@ -1,7 +1,8 @@
 streamlit
-pandas
 gspread
 oauth2client
+pandas
 geopy
 plotly
-requests
+folium
+streamlit-folium

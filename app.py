@@ -22,12 +22,6 @@ TIPOS_REGISTRO = [
     "Outros",
 ]
 
-# --- COORDENADAS MANUAIS PARA PONTOS CRÍTICOS DA SC-405 ---
-COORDENADAS_FIXAS_SC405 = {
-    "4733": {"lat": -27.674500, "lon": -48.491200, "nome": "CATBLACK BAR"},
-    "3520": {"lat": -27.662100, "lon": -48.489500, "nome": "PARK HUB / Campeche Park"}
-}
-
 st.set_page_config(
     page_title="Roteiro MooveChain Florianópolis",
     page_icon="📍",
@@ -190,17 +184,7 @@ def conectar_sheets():
 
 
 @st.cache_data(ttl=86400)
-def geolocalizar_endereco(endereco, rua="", numero=""):
-    # 1. Verifica se é Rodovia Francisco Magno Vieira ou SC-405 e possui número mapeado fixo
-    rua_upper = str(rua).upper()
-    end_upper = str(endereco).upper()
-    num_str = str(numero).strip()
-
-    if "FRANCISCO MAGNO VIEIRA" in rua_upper or "SC-405" in rua_upper or "FRANCISCO MAGNO VIEIRA" in end_upper or "SC-405" in end_upper:
-        if num_str in COORDENADAS_FIXAS_SC405:
-            return str(COORDENADAS_FIXAS_SC405[num_str]["lat"]), str(COORDENADAS_FIXAS_SC405[num_str]["lon"])
-
-    # 2. Caso contrário, executa a geolocalização normal via Nominatim
+def geolocalizar_endereco(endereco):
     try:
         geolocator = Nominatim(
             user_agent="moovechain_floripa_geo_2026", timeout=12
@@ -210,6 +194,7 @@ def geolocalizar_endereco(endereco, rua="", numero=""):
         if location:
             lat_f = float(location.latitude)
             lon_f = float(location.longitude)
+            # Validação estricta para garantir que está dentro de Florianópolis
             if -27.85 <= lat_f <= -27.30 and -48.65 <= lon_f <= -48.35:
                 return str(lat_f), str(lon_f)
     except Exception:
@@ -728,11 +713,11 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                     pass
 
             endereco_completo = str(row.get("Endereço Completo", "")).strip()
-            rua = str(row.get("Rua", "")).strip()
-            numero = str(row.get("Numero", "")).strip()
 
             if lat is None or lon is None:
                 if not endereco_completo or endereco_completo in ["nan", "None"]:
+                    rua = str(row.get("Rua", "")).strip()
+                    numero = str(row.get("Numero", "")).strip()
                     bairro = str(row.get("Bairro", "")).strip()
                     cidade = str(row.get("Cidade", "Florianópolis")).strip()
                     cep = str(row.get("CEP", "")).strip()
@@ -740,7 +725,7 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                         f"{rua}, {numero} - {bairro}, {cidade} - SC, {cep}"
                     )
 
-                lat_geo, lon_geo = geolocalizar_endereco(endereco_completo, rua=rua, numero=numero)
+                lat_geo, lon_geo = geolocalizar_endereco(endereco_completo)
                 if lat_geo and lon_geo:
                     try:
                         lat, lon = float(lat_geo), float(lon_geo)
@@ -982,27 +967,431 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
                 "💾 Salvar Alterações na Planilha", type="primary"
             ):
                 try:
-                    n_end_comp = f"{n_rua}, {n_num} - {n_bairro}, {n_cid} - {n_est}, {n_cep}"
-                    
-                    # Se alterou rua/número para a SC-405, recalcula automaticamente se necessário
-                    final_lat, final_lng = n_lat, n_lng
-                    if not final_lat or not final_lng:
-                        l_geo, l_lon_geo = geolocalizar_endereco(n_end_comp, rua=n_rua, numero=n_num)
-                        if l_geo and l_lon_geo:
-                            final_lat, final_lng = l_geo, l_lon_geo
+                    n_end_comp = f"{n_rua}, {n_num} - {n_bairro}, {n_cid} - {n_est}, CEP {n_cep}, Brasil"
+                    if not n_lat or not n_lng:
+                        n_lat, n_lng = geolocalizar_endereco(n_end_comp)
 
-                    # Atualização correspondente no Sheets
-                    # (Mapeamento padrão das colunas)
-                    sheet.update_cell(linha_real, cabecalho.index("Destinatário") + 1, n_dest)
-                    if "Rua" in cabecalho: sheet.update_cell(linha_real, cabecalho.index("Rua") + 1, n_rua)
-                    if "Numero" in cabecalho: sheet.update_cell(linha_real, cabecalho.index("Numero") + 1, n_num)
-                    if "Bairro" in cabecalho: sheet.update_cell(linha_real, cabecalho.index("Bairro") + 1, n_bairro)
-                    if "Status" in cabecalho: sheet.update_cell(linha_real, cabecalho.index("Status") + 1, n_st)
-                    if "Latitude" in cabecalho: sheet.update_cell(linha_real, cabecalho.index("Latitude") + 1, final_lat)
-                    if "Longitude" in cabecalho: sheet.update_cell(linha_real, cabecalho.index("Longitude") + 1, final_lng)
+                    if n_st != "Pendente" and not n_data_visita.strip():
+                        n_data_visita = date.today().strftime("%Y-%m-%d")
+
+                    novos_valores = [
+                        n_dest,
+                        n_rua,
+                        n_num,
+                        n_bairro,
+                        n_cid,
+                        n_est,
+                        n_cep,
+                        n_end_comp,
+                        n_st,
+                        n_lat,
+                        n_lng,
+                        n_data_visita,
+                    ]
+
+                    sheet.update(
+                        range_name=f"A{linha_real}:L{linha_real}",
+                        values=[novos_valores],
+                    )
 
                     st.cache_data.clear()
-                    st.session_state["mensagem_sucesso_edicao"] = f"✅ Registro de **{n_dest}** atualizado com sucesso!"
+                    st.session_state[
+                        "mensagem_sucesso_edicao"
+                    ] = f"✅ Alteração salva com sucesso para **{n_dest}**!"
                     st.rerun()
-                except Exception as ex_edit:
-                    st.error(f"Erro ao salvar edição: {ex_edit}")
+                except Exception as err:
+                    st.error(f"❌ Erro ao salvar na planilha: {err}")
+
+
+# --- ABA 5: ADICIONAR NOVO REGISTRO ---
+elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
+    st.subheader("➕ Novo Registro")
+    with st.form("f_novo"):
+        dest = st.text_input("Destinatário")
+        rua = st.text_input("Rua")
+        num = st.text_input("Número")
+        bairro = st.text_input("Bairro")
+        cid = st.text_input("Cidade", value="Florianópolis")
+        est = st.text_input("Estado", value="SC")
+        cep = st.text_input("CEP")
+        st_novo = st.selectbox("Status", LISTA_STATUS)
+
+        if st.form_submit_button("➕ Cadastrar", type="primary"):
+            if dest:
+                try:
+                    end_comp = f"{rua}, {num} - {bairro}, {cid} - {est}, CEP {cep}, Brasil"
+                    lat, lng = geolocalizar_endereco(end_comp)
+                    data_visita_novo = (
+                        date.today().strftime("%Y-%m-%d")
+                        if st_novo != "Pendente"
+                        else ""
+                    )
+                    sheet.append_row(
+                        [
+                            dest,
+                            rua,
+                            num,
+                            bairro,
+                            cid,
+                            est,
+                            cep,
+                            end_comp,
+                            st_novo,
+                            lat,
+                            lng,
+                            data_visita_novo,
+                        ]
+                    )
+                    st.success("✅ Novo destinatário adicionado ao Google Sheets!")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"❌ Erro ao cadastrar na planilha: {err}")
+
+
+# --- ABA 6: MANUTENÇÃO E OTIMIZAÇÃO DO APP ---
+elif opcao == "🛠️ Manutenção e Otimização do App" and st.session_state["autenticado"]:
+    st.subheader("🛠️ Painel de Manutenção e Reparo de Dados")
+    st.markdown("---")
+    st.markdown(
+        "Utilize as ferramentas abaixo para escanear a base de dados em busca de inconsistências geográficas (pontos sem coordenadas ou alocados fora da região de Florianópolis) e realizar o reparo em lote."
+    )
+
+    LAT_MIN, LAT_MAX = -27.85, -27.30
+    LON_MIN, LON_MAX = -48.65, -48.35
+
+
+    def coordenada_valida(lat, lon):
+        try:
+            lat_f = float(lat)
+            lon_f = float(lon)
+            return LAT_MIN <= lat_f <= LAT_MAX and LON_MIN <= lon_f <= LON_MAX
+        except (ValueError, TypeError):
+            return False
+
+
+    pontos_inconsistentes = 0
+    for _, r in df.iterrows():
+        if not coordenada_valida(r.get("Latitude", ""), r.get("Longitude", "")):
+            pontos_inconsistentes += 1
+
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        st.metric(label="📍 Total de Pontos na Base", value=len(df))
+    with col_m2:
+        st.metric(
+            label="⚠️ Pontos sem Coordenadas / Inválidos",
+            value=pontos_inconsistentes,
+            delta_color="inverse",
+        )
+
+    st.markdown("### 🔧 Ferramenta de Varredura e Correção Geográfica")
+    st.markdown(
+        "Ao clicar no botão abaixo, o sistema irá varrer a planilha, identificar os estabelecimentos com coordenadas ausentes ou incorretas (fora de Florianópolis), recalcular o posicionamento correto via geocodificador e atualizar o Google Sheets automaticamente."
+    )
+
+    if st.button("🚀 Executar Reparo de Coordenadas em Lote", type="primary"):
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        total_linhas = len(df)
+        reparados = 0
+        falhas = 0
+
+        for idx, row in df.iterrows():
+            linha_real = int(row["_linha_sheets"])
+            lat_val = str(row.get("Latitude", "")).strip()
+            lon_val = str(row.get("Longitude", "")).strip()
+
+            if not coordenada_valida(lat_val, lon_val):
+                dest_nome = row.get("Destinatário", "Local")
+                status_text.text(
+                    f"Reparando ({idx+1}/{total_linhas}): {dest_nome}..."
+                )
+
+                rua = str(row.get("Rua", "")).strip()
+                numero = str(row.get("Numero", "")).strip()
+                bairro = str(row.get("Bairro", "")).strip()
+                cidade = str(row.get("Cidade", "Florianópolis")).strip()
+                cep = str(row.get("CEP", "")).strip()
+
+                end_completo = (
+                    f"{rua}, {numero} - {bairro}, {cidade} - SC, {cep}, Brasil"
+                )
+                l_lat, l_lon = geolocalizar_endereco(end_completo)
+
+                if l_lat and l_lon:
+                    try:
+                        idx_lat_col = cabecalho.index("Latitude") + 1
+                        idx_lon_col = cabecalho.index("Longitude") + 1
+
+                        sheet.update_cell(linha_real, idx_lat_col, str(l_lat))
+                        sheet.update_cell(linha_real, idx_lon_col, str(l_lon))
+                        reparados += 1
+                    except Exception:
+                        falhas += 1
+                else:
+                    falhas += 1
+                time.sleep(1)
+
+            progress_bar.progress((idx + 1) / total_linhas)
+
+        status_text.empty()
+        progress_bar.empty()
+        st.cache_data.clear()
+
+        # Feedback claro e explícito após a execução
+        st.success(
+            f"✅ **Varredura Finalizada com Sucesso!**\n\n"
+            f"- 🟢 **Total de pontos reparados e salvos no Sheets:** {reparados}\n"
+            f"- ⚠️ **Pontos que não puderam ser geocodificados automaticamente:** {falhas}"
+        )
+        if reparados > 0:
+            st.balloons()
+
+
+# --- ABA 7: CUSTOS LOGÍSTICOS E FROTA ---
+elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticado"]:
+    st.subheader(
+        "🚚 Controle de Custos Logísticos (Abastecimentos e Manutenções)"
+    )
+    st.markdown("---")
+
+    aba_custos = obter_ou_criar_aba(
+        "Controle_Custos",
+        [
+            "Data",
+            "Tipo de Registro",
+            "Local / Posto",
+            "Odômetro (KM)",
+            "Custo (R$)",
+            "Litros",
+        ],
+    )
+
+    val_custos = aba_custos.get_all_values()
+    if len(val_custos) > 1:
+        df_custos = pd.DataFrame(val_custos[1:], columns=val_custos[0])
+        df_custos["_linha_sheets"] = range(2, len(val_custos) + 1)
+    else:
+        df_custos = pd.DataFrame(
+            columns=[
+                "Data",
+                "Tipo de Registro",
+                "Local / Posto",
+                "Odômetro (KM)",
+                "Custo (R$)",
+                "Litros",
+                "_linha_sheets",
+            ]
+        )
+
+    tab_novo_lancamento, tab_editar_lancamento, tab_tabela_custos, tab_relatorio_custos = st.tabs(
+        [
+            "➕ Novo Lançamento",
+            "✏️ Editar Lançamento",
+            "📋 Tabela de Registros",
+            "📊 Indicadores e Métricas",
+        ]
+    )
+
+    with tab_novo_lancamento:
+        st.markdown("### Adicionar Novo Registro de Custo / Abastecimento")
+        with st.form("form_novo_custo"):
+            c_data = st.date_input("Data", value=date.today())
+            c_tipo = st.selectbox("Tipo de Registro", TIPOS_REGISTRO)
+            c_local = st.text_input(
+                "Local / Posto (Ex: Primos Pequeno Príncipe, Posto Ipiranga, Moto Moto)"
+            )
+            c_odometro = st.text_input("Odômetro (KM) (Ex: 925.690)")
+            c_custo = st.text_input("Custo (R$) (Ex: 45,09)")
+            c_litros = st.text_input(
+                "Litros (Deixar em branco se for manutenção)"
+            )
+
+            if st.form_submit_button("Salvar Registro", type="primary"):
+                try:
+                    aba_custos.append_row(
+                        [
+                            str(c_data),
+                            c_tipo,
+                            c_local,
+                            c_odometro,
+                            c_custo,
+                            c_litros,
+                        ]
+                    )
+                    st.success(
+                        "✅ Registro adicionado com sucesso ao Google Sheets!"
+                    )
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as err:
+                    st.error(f"Erro ao salvar registro: {err}")
+
+    with tab_editar_lancamento:
+        st.markdown("### ✏️ Editar Lançamento Existente")
+        if not df_custos.empty:
+            df_custos["Identificador_Custo"] = df_custos.apply(
+                lambda r: f"Linha {r['_linha_sheets']} | {r['Data']} - {r['Tipo de Registro']} ({r['Local / Posto']} - {r['Odômetro (KM)']})",
+                axis=1,
+            )
+
+            sel_custo_edit = st.selectbox(
+                "Selecione o registro que deseja alterar:",
+                options=df_custos["Identificador_Custo"].tolist(),
+            )
+
+            if sel_custo_edit:
+                dados_c = df_custos[
+                    df_custos["Identificador_Custo"] == sel_custo_edit
+                ].iloc[0]
+                l_real = int(dados_c["_linha_sheets"])
+
+                with st.form("form_edicao_custo"):
+                    e_data = st.text_input("Data", value=str(dados_c["Data"]))
+
+                    t_atual = str(dados_c["Tipo de Registro"]).strip()
+                    idx_t = (
+                        TIPOS_REGISTRO.index(t_atual)
+                        if t_atual in TIPOS_REGISTRO
+                        else 0
+                    )
+                    e_tipo = st.selectbox(
+                        "Tipo de Registro", TIPOS_REGISTRO, index=idx_t
+                    )
+
+                    e_local = st.text_input(
+                        "Local / Posto", value=str(dados_c["Local / Posto"])
+                    )
+                    e_odometro = st.text_input(
+                        "Odômetro (KM)", value=str(dados_c["Odômetro (KM)"])
+                    )
+                    e_custo = st.text_input(
+                        "Custo (R$)", value=str(dados_c["Custo (R$)"])
+                    )
+                    e_litros = st.text_input(
+                        "Litros", value=str(dados_c["Litros"])
+                    )
+
+                    if st.form_submit_button(
+                        "💾 Salvar Alterações", type="primary"
+                    ):
+                        try:
+                            novos_valores_custo = [
+                                e_data,
+                                e_tipo,
+                                e_local,
+                                e_odometro,
+                                e_custo,
+                                e_litros,
+                            ]
+                            aba_custos.update(
+                                range_name=f"A{l_real}:F{l_real}",
+                                values=[novos_valores_custo],
+                            )
+                            st.success(
+                                f"✅ Registro da linha {l_real} atualizado com sucesso!"
+                            )
+                            st.cache_data.clear()
+                            st.rerun()
+                        except Exception as err:
+                            st.error(f"❌ Erro ao atualizar o registro: {err}")
+        else:
+            st.info("Nenhum registro encontrado para edição.")
+
+    with tab_tabela_custos:
+        st.markdown("### Histórico Completo de Lançamentos")
+        if not df_custos.empty:
+            st.dataframe(
+                df_custos.drop(
+                    columns=["_linha_sheets", "Identificador_Custo"],
+                    errors="ignore",
+                ),
+                use_container_width=True,
+            )
+        else:
+            st.info("Ainda não há registros na aba de custos.")
+
+    with tab_relatorio_custos:
+        st.markdown(
+            "### 📊 Indicadores de Consumo (Km/L) e Manutenção Preventiva"
+        )
+
+        if not df_custos.empty:
+            df_analise = df_custos.copy()
+            df_analise["Odometro_Clean"] = pd.to_numeric(
+                df_analise["Odômetro (KM)"]
+                .astype(str)
+                .str.replace(".", "", regex=False)
+                .str.replace(",", ".", regex=False),
+                errors="coerce",
+            )
+
+            df_analise["Custo_Clean"] = pd.to_numeric(
+                df_analise["Custo (R$)"]
+                .astype(str)
+                .str.replace("R$", "", regex=False)
+                .str.replace(".", "", regex=False)
+                .str.replace(",", ".", regex=False)
+                .str.strip(),
+                errors="coerce",
+            ).fillna(0)
+
+            df_analise["Litros_Clean"] = pd.to_numeric(
+                df_analise["Litros"]
+                .astype(str)
+                .str.replace(",", ".", regex=False)
+                .str.strip(),
+                errors="coerce",
+            ).fillna(0)
+
+            df_abast_calc = df_analise[
+                df_analise["Tipo de Registro"].str.contains(
+                    "Abastecimento", case=False, na=False
+                )
+            ].sort_values(by="Odometro_Clean")
+
+            if len(df_abast_calc) >= 2:
+                df_abast_calc["Delta_Km"] = df_abast_calc[
+                    "Odometro_Clean"
+                ].diff()
+                df_abast_calc["Km_Por_Litro"] = df_abast_calc.apply(
+                    lambda r: round(r["Delta_Km"] / r["Litros_Clean"], 2)
+                    if r["Litros_Clean"] > 0 and r["Delta_Km"] > 0
+                    else 0,
+                    axis=1,
+                )
+
+                media_geral_km_l = df_abast_calc[
+                    df_abast_calc["Km_Por_Litro"] > 0
+                ]["Km_Por_Litro"].mean()
+                st.metric(
+                    "⛽ Consumo Médio Geral",
+                    f"{media_geral_km_l:.2f} km/l"
+                    if not pd.isna(media_geral_km_l)
+                    else "Calculando...",
+                )
+
+                st.markdown(
+                    "#### Histórico Calculado de Consumo (Km/L por Abastecimento)"
+                )
+                st.dataframe(
+                    df_abast_calc[
+                        [
+                            "Data",
+                            "Local / Posto",
+                            "Odômetro (KM)",
+                            "Litros",
+                            "Km_Por_Litro",
+                        ]
+                    ],
+                    use_container_width=True,
+                )
+            else:
+                st.info(
+                    "Insira pelo menos dois registros de abastecimento com odômetro e litros válidos para calcular o rendimento médio em km/l."
+                )
+        else:
+            st.info(
+                "Ainda não há dados suficientes para gerar relatórios de custos."
+            )

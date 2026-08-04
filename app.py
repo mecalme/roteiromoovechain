@@ -52,15 +52,13 @@ def conectar_google_sheets():
             "https://www.googleapis.com/auth/drive"
         ]
         
-        # Pega as credenciais dos Secrets do Streamlit
         credenciais_dict = dict(st.secrets["gcp_service_account"])
         credenciais = Credentials.from_service_account_info(credenciais_dict, scopes=escopos)
         cliente = gspread.authorize(credenciais)
         
-        # Abre a planilha pelo ID ou URL
         url_planilha = "https://docs.google.com/spreadsheets/d/1uYKUOVmKMn4CzTNH_9ex7ooTXCfGjTm5pEqZ1Tc8sKE/edit?usp=drive_link"
         planilha = cliente.open_by_url(url_planilha)
-        sheet = planilha.get_worksheet(0) # Primeira aba
+        sheet = planilha.get_worksheet(0)
         
         return sheet
     except Exception as e:
@@ -70,7 +68,6 @@ def conectar_google_sheets():
 sheet = conectar_google_sheets()
 
 @st.cache_data(ttl=60)
-chauffeur = {} # Trigger para cache do dataframe
 def carregar_dados():
     if sheet is None:
         return pd.DataFrame(), []
@@ -79,10 +76,8 @@ def carregar_dados():
     cabecalho = sheet.row_values(1)
     df = pd.DataFrame(dados)
     
-    # Adiciona a linha real do Google Sheets (índice 2 pois a linha 1 é o cabeçalho)
     df["_linha_sheets"] = range(2, len(df) + 2)
     
-    # Cria um identificador único seguro para selects
     if "Destinatário" in df.columns:
         df["Identificador_Unico"] = df["Destinatário"].astype(str) + " (Linha " + df["_linha_sheets"].astype(str) + ")"
     else:
@@ -91,18 +86,6 @@ def carregar_dados():
     return df, cabecalho
 
 df, cabecalho = carregar_dados()
-
-# --- FUNÇÃO DE GEOLOCALIZAÇÃO SEGURA ---
-@st.cache_data
-def geolocalizar_endereco(endereco):
-    try:
-        geolocator = Nominatim(user_agent="app_gestao_pontos_floripa_v2")
-        location = geolocator.geocode(endereco, timeout=10)
-        if location:
-            return location.latitude, location.longitude
-    except (GeocoderTimedOut, GeocoderServiceError):
-        pass
-    return None, None
 
 LISTA_STATUS = ["Auditado", "Pendente", "Cancelado", "Justificado"]
 
@@ -137,7 +120,6 @@ else:
             </div>
         """, unsafe_allow_html=True)
 
-        # Coordenadas centrais de Florianópolis (Centro)
         mapa_floripa = folium.Map(location=[-27.5954, -48.5480], zoom_start=14, control_scale=True)
 
         def obter_cor_marcador(status):
@@ -153,7 +135,6 @@ else:
             else:
                 return "gray"
 
-        # Coordenadas fixas de fallback para garantir carregamento instantâneo e sem travamentos
         coordenadas_fixas_centro = {
             "SPITFIRE PIZZARIA": (-27.5945, -48.5520),
             "BARRA COMPANY": (-27.5950, -48.5505),
@@ -186,7 +167,6 @@ else:
                 rua = str(row.get("Rua", "")).strip()
                 numero = str(row.get("Número", "")).strip()
                 
-                # 1. Verifica se existe coordenada válida nas colunas e se está no escopo geográfico correto
                 lat_raw = str(row.get("Latitude", "")).strip()
                 lon_raw = str(row.get("Longitude", "")).strip()
                 
@@ -199,14 +179,12 @@ else:
                     except ValueError:
                         pass
 
-                # 2. Se não tiver na planilha, checa no dicionário de coordenadas fixas
                 if lat is None or lon is None:
                     for chave, coord in coordenadas_fixas_centro.items():
                         if chave in destinatario.upper():
                             lat, lon = coord
                             break
 
-                # 3. Fallback final para o Centro se nada for encontrado
                 if lat is None or lon is None:
                     lat, lon = -27.5954, -48.5480
 
@@ -259,12 +237,10 @@ else:
         st.subheader("📋 Gestão e Visualização da Tabela")
         st.markdown("---")
         
-        # Filtro rápido por status
         filtro_status = st.multiselect("Filtrar por Status:", options=LISTA_STATUS, default=LISTA_STATUS)
         
         df_filtrado = df[df["Status"].isin(filtro_status)] if "Status" in df.columns else df
         
-        # Exibe a tabela sem colunas de controle interno
         colunas_exibicao = [c for c in df_filtrado.columns if not c.startswith("_") and c != "Identificador_Unico"]
         st.dataframe(df_filtrado[colunas_exibicao], use_container_width=True, height=450)
         

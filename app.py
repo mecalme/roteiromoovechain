@@ -370,6 +370,7 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         st.info("Nenhum dado encontrado para exibir no gráfico com os filtros selecionados.")
 
 # --- ABA 2: MAPA INTERATIVO DINÂMICO (FOLIUM) ---
+# --- ABA 2: MAPA INTERATIVO DINÂMICO (FOLIUM) ---
 elif opcao == "🗺️ Visualizar Mapa de Pontos":
     st.subheader("🗺️ Mapa Interativo de Pontos por Status")
     st.markdown("---")
@@ -402,55 +403,38 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
         else:
             return "gray"
 
-    # Coordenadas específicas conhecidas ou fallback detalhado por rua/região para evitar pontos perdidos
+    # Itera sobre cada linha da planilha e obtém a geolocalização limpa
     for _, row in df.iterrows():
         try:
-            lat_str = str(row.get("Latitude", "")).strip()
-            lon_str = str(row.get("Longitude", "")).strip()
-            
             lat, lon = None, None
-
-            # Tenta converter os valores da planilha se existirem
-            if lat_str and lat_str not in ["nan", "None", ""]:
-                try:
-                    lat = float(lat_str)
-                except ValueError:
-                    pass
-            if lon_str and lon_str not in ["nan", "None", ""]:
-                try:
-                    lon = float(lon_str)
-                except ValueError:
-                    pass
-
-            # Se não tiver coordenadas válidas, tenta buscar por geolocalização otimizada
-            if lat is None or lon is None:
+            
+            # Monta o endereço completo estruturado que já existe na sua planilha (última coluna)
+            endereco_completo = str(row.get("Endereço Completo", "")).strip()
+            
+            # Se não tiver o endereço completo pronto, monta usando Rua, Número, Bairro e CEP
+            if not endereco_completo or endereco_completo in ["nan", "None"]:
                 rua = str(row.get("Rua", "")).strip()
+                numero = str(row.get("Número", "")).strip()
                 bairro = str(row.get("Bairro", "")).strip()
                 cidade = str(row.get("Cidade", "Florianópolis")).strip()
-                
-                # Formato de busca ideal para o Nominatim achar ruas centrais como a Rua Tiradentes
-                queries_possiveis = [
-                    f"{rua}, {bairro}, {cidade}, SC, Brasil",
-                    f"{rua}, {cidade}, SC, Brasil",
-                    f"Rua {rua}, Florianópolis, SC"
-                ]
-                
-                for q in queries_possiveis:
-                    lat_geo, lon_geo = geolocalizar_endereco(q)
-                    if lat_geo and lon_geo:
-                        lat, lon = float(lat_geo), float(lon_geo)
-                        break
+                cep = str(row.get("CEP", "")).strip()
+                endereco_completo = f"{rua}, {numero} - {bairro}, {cidade} - SC, {cep}"
 
-            # Se ainda assim falhar (último caso), usa o ponto central da região do Centro de Florianópolis ligeiramente deslocado para não sobrepor
+            # Tenta geolocalizar o endereço real na base de dados do mapa
+            lat_geo, lon_geo = geolocalizar_endereco(endereco_completo)
+            if lat_geo and lon_geo:
+                lat, lon = float(lat_geo), float(lon_geo)
+            
+            # Fallback de segurança caso a API falhe para algum endereço específico
             if lat is None or lon is None:
                 lat, lon = -27.5954, -48.5480
 
-            status = row["Status"]
-            destinatario = row["Destinatário"]
+            status = row.get("Status", "Pendente")
+            destinatario = row.get("Destinatário", "Local")
             bairro = row.get("Bairro", "Não informado")
             
             cor = obter_cor_marcador(status)
-            popup_html = f"<b>Destinatário:</b> {destinatario}<br><b>Bairro:</b> {bairro}<br><b>Status:</b> {status}"
+            popup_html = f"<b>Estabelecimento:</b> {destinatario}<br><b>Endereço:</b> {endereco_completo}<br><b>Status:</b> {status}"
             
             folium.Marker(
                 location=[lat, lon],
@@ -473,7 +457,7 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
     with st.form("form_status_mapa"):
         col_map1, col_map2, col_map3 = st.columns([2, 1, 1])
         with col_map1:
-            ponto_sel_mapa = st.selectbox("Escolha o Ponto / Destinatário:", options=df["Identificador_Unico"].tolist())
+            ponto_sel_mapa = st.selectbox("Escolha o Estabelecimento:", options=df["Identificador_Unico"].tolist())
         with col_map2:
             novo_status_mapa = st.selectbox("Novo Status:", options=LISTA_STATUS)
         with col_map3:
@@ -489,7 +473,7 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                 sheet.update_cell(linha_alvo, idx_status_col, novo_status_mapa)
                 
                 st.cache_data.clear()
-                st.success(f"✅ Status do ponto **{dados_ponto['Destinatário']}** atualizado para **{novo_status_mapa}** com sucesso!")
+                st.success(f"✅ Status do estabelecimento **{dados_ponto['Destinatário']}** atualizado para **{novo_status_mapa}** com sucesso!")
                 st.rerun()
             except Exception as err:
                 st.error(f"❌ Erro ao atualizar status: {err}")

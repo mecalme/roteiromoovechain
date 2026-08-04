@@ -86,6 +86,14 @@ st.markdown("""
         margin-bottom: 20px;
         border-left: 5px solid #2563eb;
     }
+    .popup-status-box {
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        margin-top: 20px;
+        border-left: 5px solid #10b981;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -415,6 +423,41 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
             continue
 
     st_folium(mapa_floripa, width=1300, height=600)
+
+    # --- PAINEL FLUTUANTE ABAIXO DO MAPA PARA ALTERAR STATUS ---
+    st.markdown("""
+        <div class="popup-status-box">
+            <h4 style="margin-top: 0; color: #1e3a8a !important;">🔄 Ação Rápida: Atualizar Status de um Ponto</h4>
+            <p style="font-size: 14px; margin-bottom: 10px;">Selecione o ponto diretamente na lista abaixo para modificar o seu status na planilha em tempo real:</p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("form_status_mapa"):
+        col_map1, col_map2, col_map3 = st.columns([2, 1, 1])
+        with col_map1:
+            ponto_sel_mapa = st.selectbox("Escolha o Ponto / Destinatário:", options=df["Identificador_Unico"].tolist())
+        with col_map2:
+            novo_status_mapa = st.selectbox("Novo Status:", options=LISTA_STATUS)
+        with col_map3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            btn_atualizar_mapa = st.form_submit_button("💾 Salvar Novo Status", type="primary", use_container_width=True)
+
+        if btn_atualizar_mapa:
+            try:
+                dados_ponto = df[df["Identificador_Unico"] == ponto_sel_mapa].iloc[0]
+                linha_alvo = int(dados_ponto["_linha_sheets"])
+                
+                # Descobre qual coluna é a de Status (procurando pelo cabeçalho original)
+                idx_status_col = cabecalho.index("Status") + 1 if "Status" in cabecalho else 9
+                
+                # Atualiza apenas a célula de status na planilha
+                sheet.update_cell(linha_alvo, idx_status_col, novo_status_mapa)
+                
+                st.cache_data.clear()
+                st.success(f"✅ Status do ponto **{dados_ponto['Destinatário']}** atualizado para **{novo_status_mapa}** com sucesso!")
+                st.rerun()
+            except Exception as err:
+                st.error(f"❌ Erro ao atualizar status: {err}")
 
 
 # --- ABA 3: TABELA DE DADOS E AÇÕES ---

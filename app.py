@@ -403,10 +403,34 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
         else:
             return "gray"
 
+    coordenadas_bairros = {
+        "Centro": (-27.5954, -48.5480),
+        "Trindade": (-27.5997, -48.5201),
+        "Itacorubi": (-27.5812, -48.5135),
+        "Agronômica": (-27.5878, -48.5385),
+    }
+
     for _, row in df.iterrows():
         try:
-            lat = float(row["Latitude"])
-            lon = float(row["Longitude"])
+            lat_str = str(row.get("Latitude", "")).strip()
+            lon_str = str(row.get("Longitude", "")).strip()
+            
+            if not lat_str or not lon_str or lat_str in ["nan", "None", ""]:
+                bairro_atual = str(row.get("Bairro", "Centro")).strip()
+                rua_atual = str(row.get("Rua", "")).strip()
+                cid_atual = str(row.get("Cidade", "Florianópolis")).strip()
+                
+                end_busca = f"{rua_atual}, {bairro_atual}, {cid_atual}, SC, Brasil"
+                lat_geo, lon_geo = geolocalizar_endereco(end_busca)
+                
+                if lat_geo and lon_geo:
+                    lat, lon = float(lat_geo), float(lon_geo)
+                else:
+                    lat, lon = coordenadas_bairros.get(bairro_atual, (-27.5954, -48.5480))
+            else:
+                lat = float(lat_str)
+                lon = float(lon_str)
+
             status = row["Status"]
             destinatario = row["Destinatário"]
             bairro = row.get("Bairro", "Não informado")
@@ -446,11 +470,8 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
             try:
                 dados_ponto = df[df["Identificador_Unico"] == ponto_sel_mapa].iloc[0]
                 linha_alvo = int(dados_ponto["_linha_sheets"])
-                
-                # Descobre qual coluna é a de Status (procurando pelo cabeçalho original)
                 idx_status_col = cabecalho.index("Status") + 1 if "Status" in cabecalho else 9
                 
-                # Atualiza apenas a célula de status na planilha
                 sheet.update_cell(linha_alvo, idx_status_col, novo_status_mapa)
                 
                 st.cache_data.clear()

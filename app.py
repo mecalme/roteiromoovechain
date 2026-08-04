@@ -174,4 +174,49 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
 # --- ABA 3: TABELA DE DADOS E AÇÕES ---
 elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:
     st.subheader("📋 Tabela de Destinatários e Rotas")
-    st.markdown
+    st.markdown("---")
+
+# --- ABA 4: EDITAR REGISTRO EXISTENTE ---
+elif opcao == "✏️ Editar Registro Existente" and st.session_state["autenticado"]:
+    st.subheader("✏️ Editar Registro na Planilha")
+    st.markdown("---")
+
+# --- ABA 5: ADICIONAR NOVO REGISTRO ---
+elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
+    st.subheader("➕ Novo Registro")
+    st.markdown("---")
+    with st.form("f_novo"):
+        dest = st.text_input("Destinatário")
+        rua = st.text_input("Rua")
+        num = st.text_input("Número")
+        bairro = st.text_input("Bairro")
+        cid = st.text_input("Cidade", value="Florianópolis")
+        est = st.text_input("Estado", value="SC")
+        cep = st.text_input("CEP")
+        st_novo = st.selectbox("Status", LISTA_STATUS)
+        
+        submitted = st.form_submit_button("Salvar Novo Registro")
+        if submitted:
+            if not dest or not rua:
+                st.warning("⚠️ Preencha ao menos os campos Destinatário e Rua.")
+            else:
+                endereco_completo = f"{rua}, {num} - {bairro}"
+                lat, lon = geolocalizar_endereco(endereco_completo)
+                
+                nova_linha = [dest, rua, num, bairro, cid, est, cep, st_novo, lat, lon]
+                try:
+                    sheet.append_row(nova_linha)
+                    st.success("✅ Registro adicionado com sucesso à planilha!")
+                except Exception as e:
+                    st.error(f"❌ Erro ao salvar na planilha: {e}")
+
+# --- ABA 6: MANUTENÇÃO E OTIMIZAÇÃO DO APP ---
+elif opcao == "🛠️ Manutenção e Otimização do App" and st.session_state["autenticado"]:
+    st.subheader("🛠️ Painel de Manutenção e Reparo de Dados")
+    st.markdown("---")
+    st.markdown("Utilize as ferramentas abaixo para escanear a base de dados em busca de inconsistências geográficas (pontos sem coordenadas ou alocados fora da região de Florianópolis) e realizar o reparo em lote.")
+
+# --- ABA 7: CUSTOS LOGÍSTICOS E FROTA ---
+elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticado"]:
+    st.subheader("🚚 Controle de Custos Logísticos (Abastecimentos e Manutenções)")
+    st.markdown("---")

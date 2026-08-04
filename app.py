@@ -1,24 +1,24 @@
+from datetime import date
 import re
+import folium
+from geopy.geocoders import Nominatim
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import pandas as pd
-import streamlit as st
-from geopy.geocoders import Nominatim
 import plotly.express as px
-from datetime import date
-import folium
 from streamlit_folium import st_folium
+import streamlit as st
 
 LISTA_STATUS = ["Pendente", "Auditado", "Cancelado", "Justificado"]
 TIPOS_REGISTRO = [
-    "Abastecimento", 
-    "Troca de Óleo", 
-    "troca de Óleo + filtro", 
-    "Pneus", 
-    "Reparo no Motor", 
-    "Filtro de Combustível (+1)", 
-    "Filtro de Óleo (+1)", 
-    "Outros"
+    "Abastecimento",
+    "Troca de Óleo",
+    "troca de Óleo + filtro",
+    "Pneus",
+    "Reparo no Motor",
+    "Filtro de Combustível (+1)",
+    "Filtro de Óleo (+1)",
+    "Outros",
 ]
 
 st.set_page_config(
@@ -28,7 +28,8 @@ st.set_page_config(
 )
 
 # --- ESTILIZAÇÃO CSS CUSTOMIZADA ---
-st.markdown("""
+st.markdown(
+    """
     <style>
     .stApp {
         background-color: #f0f4f8;
@@ -95,7 +96,9 @@ st.markdown("""
         border-left: 5px solid #10b981;
     }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 st.title("📍 Roteiro MooveChain - Florianópolis")
 
@@ -105,7 +108,9 @@ if "autenticado" not in st.session_state:
 
 st.sidebar.markdown("### 🔐 Acesso Administrativo")
 if not st.session_state["autenticado"]:
-    senha_digitada = st.sidebar.text_input("Senha do Administrador:", type="password")
+    senha_digitada = st.sidebar.text_input(
+        "Senha do Administrador:", type="password"
+    )
     if st.sidebar.button("Entrar", key="btn_login"):
         senha_correta = st.secrets.get("admin_password", "moovechain2026")
         if senha_digitada == senha_correta:
@@ -139,7 +144,10 @@ else:
         "🗺️ Visualizar Mapa de Pontos",
     ]
 
-if "menu_selecionado" not in st.session_state or st.session_state["menu_selecionado"] not in OPCOES_MENU:
+if (
+    "menu_selecionado" not in st.session_state
+    or st.session_state["menu_selecionado"] not in OPCOES_MENU
+):
     st.session_state["menu_selecionado"] = OPCOES_MENU[0]
 
 if "destinatario_para_editar" not in st.session_state:
@@ -155,22 +163,30 @@ def conectar_sheets():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive",
     ]
-    
+
     if "gcp_service_account" in st.secrets:
         creds_dict = dict(st.secrets["gcp_service_account"])
-        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(
+            creds_dict, scope
+        )
     else:
-        creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
-        
+        creds = ServiceAccountCredentials.from_json_keyfile_name(
+            "credentials.json", scope
+        )
+
     client = gspread.authorize(creds)
-    spreadsheet = client.open_by_key("12sENMxX1FoQ6KYNgnlnXzD3abDqO4VH_jypcB-nQGks")
+    spreadsheet = client.open_by_key(
+        "12sENMxX1FoQ6KYNgnlnXzD3abDqO4VH_jypcB-nQGks"
+    )
     return spreadsheet
 
 
 @st.cache_data(ttl=86400)
 def geolocalizar_endereco(endereco):
     try:
-        geolocator = Nominatim(user_agent="moovechain_app_fast_2026", timeout=10)
+        geolocator = Nominatim(
+            user_agent="moovechain_app_fast_2026", timeout=10
+        )
         location = geolocator.geocode(endereco)
         if location:
             return str(location.latitude), str(location.longitude)
@@ -186,9 +202,16 @@ try:
 
     if len(todos_os_valores) > 1:
         cabecalho = [str(c).strip() for c in todos_os_valores[0]]
+
+        if "Data Visita" not in cabecalho:
+            cabecalho.append("Data Visita")
+            sheet.update(range_name="A1:Z1", values=[cabecalho])
+            todos_os_valores = sheet.get_all_values()
+            cabecalho = [str(c).strip() for c in todos_os_valores[0]]
+
         dados = todos_os_valores[1:]
 
-        df = pd.DataFrame(dados, columns=cabecalho)
+        df = pd.DataFrame(dados, columns=cabecalho[: len(dados[0])])
         df["_linha_sheets"] = range(2, len(dados) + 2)
     else:
         st.warning("A planilha principal parece estar vazia.")
@@ -197,20 +220,25 @@ try:
     if "Status" not in df.columns:
         df["Status"] = "Pendente"
     df["Status"] = (
-        df["Status"].astype(str).str.strip().replace(["", "nan", "None"], "Pendente")
+        df["Status"]
+        .astype(str)
+        .str.strip()
+        .replace(["", "nan", "None"], "Pendente")
     )
     df["Status"] = df["Status"].str.capitalize()
 
     if "Bairro" in df.columns:
         df["Bairro"] = df["Bairro"].astype(str).str.strip()
-        df["Bairro"] = df["Bairro"].replace(["", "nan", "None"], "Não Especificado")
+        df["Bairro"] = df["Bairro"].replace(
+            ["", "nan", "None"], "Não Especificado"
+        )
 
     if "Destinatário" in df.columns:
         df["Destinatário"] = df["Destinatário"].astype(str).str.strip()
 
     df["Identificador_Unico"] = df.apply(
         lambda r: f"Linha {r['_linha_sheets']} | {r['Destinatário']} ({r.get('Bairro', '')} - {r.get('Rua', '')})",
-        axis=1
+        axis=1,
     )
 
 except Exception as e:
@@ -244,36 +272,80 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
 
     st.markdown("### 🔍 Filtros Dinâmicos")
     col_f1, col_f2, col_f3, col_f4 = st.columns(4)
-    
+
     with col_f1:
-        estados_disponiveis = sorted([str(e) for e in df.get("Estado", pd.Series(["SC"])).unique() if str(e).strip() != ""])
-        estados_sel = st.multiselect("Filtrar por Estado(s):", options=estados_disponiveis, default=[])
-    
-    df_temp_est = df[df["Estado"].astype(str).isin(estados_sel)] if estados_sel else df
+        estados_disponiveis = sorted(
+            [
+                str(e)
+                for e in df.get("Estado", pd.Series(["SC"])).unique()
+                if str(e).strip() != ""
+            ]
+        )
+        estados_sel = st.multiselect(
+            "Filtrar por Estado(s):", options=estados_disponiveis, default=[]
+        )
+
+    df_temp_est = (
+        df[df["Estado"].astype(str).isin(estados_sel)]
+        if estados_sel
+        else df
+    )
 
     with col_f2:
-        cidades_disponiveis = sorted([str(c) for c in df_temp_est.get("Cidade", pd.Series(["Florianópolis"])).unique() if str(c).strip() != ""])
-        cidades_sel = st.multiselect("Filtrar por Cidade(s):", options=cidades_disponiveis, default=[])
+        cidades_disponiveis = sorted(
+            [
+                str(c)
+                for c in df_temp_est.get(
+                    "Cidade", pd.Series(["Florianópolis"])
+                ).unique()
+                if str(c).strip() != ""
+            ]
+        )
+        cidades_sel = st.multiselect(
+            "Filtrar por Cidade(s):", options=cidades_disponiveis, default=[]
+        )
 
-    df_temp_cid = df_temp_est[df_temp_est["Cidade"].astype(str).isin(cidades_sel)] if cidades_sel else df_temp_est
+    df_temp_cid = (
+        df_temp_est[df_temp_est["Cidade"].astype(str).isin(cidades_sel)]
+        if cidades_sel
+        else df_temp_est
+    )
 
     with col_f3:
-        bairros_disponiveis = sorted([str(b) for b in df_temp_cid.get("Bairro", pd.Series()).unique() if str(b).strip() != ""])
-        bairros_sel = st.multiselect("Filtrar por Bairro(s):", options=bairros_disponiveis, default=[])
+        bairros_disponiveis = sorted(
+            [
+                str(b)
+                for b in df_temp_cid.get("Bairro", pd.Series()).unique()
+                if str(b).strip() != ""
+            ]
+        )
+        bairros_sel = st.multiselect(
+            "Filtrar por Bairro(s):", options=bairros_disponiveis, default=[]
+        )
 
     with col_f4:
         opcoes_status_filtro = ["Todos"] + LISTA_STATUS
-        status_sel = st.multiselect("Filtrar por Status:", options=opcoes_status_filtro, default=["Todos"])
+        status_sel = st.multiselect(
+            "Filtrar por Status:", options=opcoes_status_filtro, default=["Todos"]
+        )
 
     df_dashboard = df.copy()
     if estados_sel:
-        df_dashboard = df_dashboard[df_dashboard["Estado"].astype(str).isin(estados_sel)]
+        df_dashboard = df_dashboard[
+            df_dashboard["Estado"].astype(str).isin(estados_sel)
+        ]
     if cidades_sel:
-        df_dashboard = df_dashboard[df_dashboard["Cidade"].astype(str).isin(cidades_sel)]
+        df_dashboard = df_dashboard[
+            df_dashboard["Cidade"].astype(str).isin(cidades_sel)
+        ]
     if bairros_sel:
-        df_dashboard = df_dashboard[df_dashboard["Bairro"].astype(str).isin(bairros_sel)]
+        df_dashboard = df_dashboard[
+            df_dashboard["Bairro"].astype(str).isin(bairros_sel)
+        ]
     if status_sel and "Todos" not in status_sel:
-        df_dashboard = df_dashboard[df_dashboard["Status"].astype(str).isin(status_sel)]
+        df_dashboard = df_dashboard[
+            df_dashboard["Status"].astype(str).isin(status_sel)
+        ]
 
     st.markdown("---")
 
@@ -282,29 +354,47 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         "⚙️ Status considerados como Concluídos:",
         options=LISTA_STATUS,
         default=status_padrao,
-        help="Escolha quais status representam uma visita/medição finalizada."
+        help="Escolha quais status representam uma visita/medição finalizada.",
     )
 
     total_geral = len(df_dashboard)
     df_concluidos = df_dashboard[df_dashboard["Status"].isin(status_medicao)]
     concluidos = len(df_concluidos)
     restantes = total_geral - concluidos
-    pct_conclusao = (concluidos / total_geral * 100) if total_geral > 0 else 0.0
+    pct_conclusao = (
+        (concluidos / total_geral * 100) if total_geral > 0 else 0.0
+    )
 
     st.markdown("### 1. 🎯 Progresso Global de Auditorias")
     st.progress(pct_conclusao / 100 if total_geral > 0 else 0.0)
-    st.caption(f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado (Total filtrado: {total_geral} pontos)")
+    st.caption(
+        f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado (Total filtrado: {total_geral} pontos)"
+    )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
     col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
     with col_kpi1:
-        st.metric(label="📍 Total Geral de Pontos", value=f"{total_geral:,}".replace(",", "."))
+        st.metric(
+            label="📍 Total Geral de Pontos",
+            value=f"{total_geral:,}".replace(",", "."),
+        )
     with col_kpi2:
-        st.metric(label="✅ Visitas Concluídas", value=f"{concluidos:,}".replace(",", "."), delta=f"{pct_conclusao:.1f}% do Total")
+        st.metric(
+            label="✅ Visitas Concluídas",
+            value=f"{concluidos:,}".replace(",", "."),
+            delta=f"{pct_conclusao:.1f}% do Total",
+        )
     with col_kpi3:
-        pct_restante = (restantes / total_geral * 100) if total_geral > 0 else 0.0
-        st.metric(label="⏳ Restantes / Pendentes", value=f"{restantes:,}".replace(",", "."), delta=f"-{pct_restante:.1f}% Restantes", delta_color="inverse")
+        pct_restante = (
+            (restantes / total_geral * 100) if total_geral > 0 else 0.0
+        )
+        st.metric(
+            label="⏳ Restantes / Pendentes",
+            value=f"{restantes:,}".replace(",", "."),
+            delta=f"-{pct_restante:.1f}% Restantes",
+            delta_color="inverse",
+        )
     with col_kpi4:
         st.metric(label="🎯 Progresso Global", value=f"{pct_conclusao:.1f}%")
 
@@ -318,13 +408,25 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     st.markdown("### 2. 📌 Detalhamento por Status Atual")
     col_s1, col_s2, col_s3, col_s4 = st.columns(4)
     with col_s1:
-        st.metric(label="🟢 Auditados", value=f"{qtd_auditado:,}".replace(",", "."))
+        st.metric(
+            label="🟢 Auditados",
+            value=f"{qtd_auditado:,}".replace(",", "."),
+        )
     with col_s2:
-        st.metric(label="🟡 Pendentes", value=f"{qtd_pendente:,}".replace(",", "."))
+        st.metric(
+            label="🟡 Pendentes",
+            value=f"{qtd_pendente:,}".replace(",", "."),
+        )
     with col_s3:
-        st.metric(label="🔴 Cancelados", value=f"{qtd_cancelado:,}".replace(",", "."))
+        st.metric(
+            label="🔴 Cancelados",
+            value=f"{qtd_cancelado:,}".replace(",", "."),
+        )
     with col_s4:
-        st.metric(label="🔵 Justificados", value=f"{qtd_justificado:,}".replace(",", "."))
+        st.metric(
+            label="🔵 Justificados",
+            value=f"{qtd_justificado:,}".replace(",", "."),
+        )
 
     st.markdown("---")
     st.markdown("### 3. 📊 Progresso por Bairro")
@@ -354,33 +456,95 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
             y="Quantidade",
             color="Situacao",
             title="Distribuição de Concluídos vs Pendentes por Bairro",
-            labels={"Bairro": "Bairro", "Quantidade": "Qtd. de Pontos", "Situacao": "Status"},
+            labels={
+                "Bairro": "Bairro",
+                "Quantidade": "Qtd. de Pontos",
+                "Situacao": "Status",
+            },
             color_discrete_map={"Concluído": "#10b981", "Pendente": "#3b82f6"},
-            category_orders={"Bairro": ordem_bairros, "Situacao": ["Concluído", "Pendente"]},
+            category_orders={
+                "Bairro": ordem_bairros,
+                "Situacao": ["Concluído", "Pendente"],
+            },
             barmode="stack",
-            text="Quantidade"
+            text="Quantidade",
         )
-        fig_stacked.update_layout(xaxis_tickangle=-45, height=450, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        fig_stacked.update_layout(
+            xaxis_tickangle=-45,
+            height=450,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+        )
         st.plotly_chart(fig_stacked, use_container_width=True)
     else:
-        st.info("Nenhum dado encontrado para exibir no gráfico com os filtros selecionados.")
+        st.info(
+            "Nenhum dado encontrado para exibir no gráfico com os filtros selecionados."
+        )
 
 
 # --- ABA EXCLUSIVA ADMIN: CONTROLE DE GANHOS E FATURAMENTO ---
 elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["autenticado"]:
     st.subheader("💰 Painel Restrito de Ganhos e Faturamento")
     st.markdown("---")
-    st.markdown("Gerencie abaixo os pontos noturnos e visualize o faturamento detalhado por ponto auditado e noturno.")
+    st.markdown(
+        "Gerencie abaixo os pontos noturnos e visualize o faturamento detalhado por ponto auditado e noturno dentro do período selecionado."
+    )
 
     try:
-        aba_noturnos = obter_ou_criar_aba("Pontos_Noturnos", ["Identificador_Unico"])
+        aba_noturnos = obter_ou_criar_aba(
+            "Pontos_Noturnos", ["Identificador_Unico"]
+        )
         valores_noturnos = aba_noturnos.get_all_values()
-        lista_noturnos_cadastrados = [row[0] for row in valores_noturnos[1:]] if len(valores_noturnos) > 1 else []
+        lista_noturnos_cadastrados = (
+            [row[0] for row in valores_noturnos[1:]]
+            if len(valores_noturnos) > 1
+            else []
+        )
     except Exception:
         lista_noturnos_cadastrados = []
 
+    # --- CONTROLE DE PERSISTÊNCIA DAS DATAS (Filtro de Período Brasil) ---
+    ano_atual = date.today().year
+    if "filtro_ganhos_desde" not in st.session_state:
+        st.session_state["filtro_ganhos_desde"] = date(ano_atual, 1, 1)
+    if "filtro_ganhos_hastá" not in st.session_state:
+        st.session_state["filtro_ganhos_hastá"] = date(ano_atual, 12, 31)
+
+    st.markdown("### 📅 Filtro de Período (De - Até)")
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        data_desde = st.date_input(
+            "Data Início (De):", 
+            value=st.session_state["filtro_ganhos_desde"],
+            key="input_desde_ganhos"
+        )
+    with col_d2:
+        data_hastá = st.date_input(
+            "Data Fim (Até):", 
+            value=st.session_state["filtro_ganhos_hastá"],
+            key="input_hasta_ganhos"
+        )
+
+    # Persiste na sessão para não resetar ao atualizar a página
+    st.session_state["filtro_ganhos_desde"] = data_desde
+    st.session_state["filtro_ganhos_hastá"] = data_hastá
+
     df_faturamento = df.copy()
-    df_faturamento["Eh_Noturno"] = df_faturamento["Identificador_Unico"].isin(lista_noturnos_cadastrados)
+
+    # Filtra as linhas conforme o intervalo de datas da visita
+    if "Data Visita" in df_faturamento.columns:
+        df_faturamento["Data_Visita_DT"] = pd.to_datetime(
+            df_faturamento["Data Visita"], errors="coerce"
+        ).dt.date
+        
+        df_faturamento = df_faturamento[
+            (df_faturamento["Data_Visita_DT"].isna()) | 
+            ((df_faturamento["Data_Visita_DT"] >= data_desde) & (df_faturamento["Data_Visita_DT"] <= data_hastá))
+        ]
+
+    df_faturamento["Eh_Noturno"] = df_faturamento[
+        "Identificador_Unico"
+    ].isin(lista_noturnos_cadastrados)
 
     def calcular_ganho_linha(row):
         status = row["Status"]
@@ -398,35 +562,75 @@ elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["aute
             else:
                 return 0.0
 
-    df_faturamento["Ganho_R$"] = df_faturamento.apply(calcular_ganho_linha, axis=1)
+    df_faturamento["Ganho_R$"] = df_faturamento.apply(
+        calcular_ganho_linha, axis=1
+    )
 
     total_ganho = df_faturamento["Ganho_R$"].sum()
-    total_auditados_normais = len(df_faturamento[(df_faturamento["Status"] == "Auditado") & (~df_faturamento["Eh_Noturno"])])
-    total_auditados_noturnos = len(df_faturamento[(df_faturamento["Status"] == "Auditado") & (df_faturamento["Eh_Noturno"])])
-    total_justificados_noturnos = len(df_faturamento[(df_faturamento["Status"] == "Justificado") & (df_faturamento["Eh_Noturno"])])
+    total_auditados_normais = len(
+        df_faturamento[
+            (df_faturamento["Status"] == "Auditado")
+            & (~df_faturamento["Eh_Noturno"])
+        ]
+    )
+    total_auditados_noturnos = len(
+        df_faturamento[
+            (df_faturamento["Status"] == "Auditado")
+            & (df_faturamento["Eh_Noturno"])
+        ]
+    )
+    total_justificados_noturnos = len(
+        df_faturamento[
+            (df_faturamento["Status"] == "Justificado")
+            & (df_faturamento["Eh_Noturno"])
+        ]
+    )
 
     col_fin1, col_fin2, col_fin3, col_fin4 = st.columns(4)
     with col_fin1:
-        st.metric(label="💵 Faturamento Total Estimado", value=f"R$ {total_ganho:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        st.metric(
+            label="💵 Faturamento no Período",
+            value=f"R$ {total_ganho:,.2f}"
+            .replace(",", "X")
+            .replace(".", ",")
+            .replace("X", "."),
+        )
     with col_fin2:
-        st.metric(label="🟢 Auditados Padrão (R$ 25)", value=f"{total_auditados_normais}")
+        st.metric(
+            label="🟢 Auditados Padrão (R$ 25)",
+            value=f"{total_auditados_normais}",
+        )
     with col_fin3:
-        st.metric(label="🌙 Auditados Noturnos (R$ 35)", value=f"{total_auditados_noturnos}")
+        st.metric(
+            label="🌙 Auditados Noturnos (R$ 35)",
+            value=f"{total_auditados_noturnos}",
+        )
     with col_fin4:
-        st.metric(label="🔵 Justificados Noturnos (R$ 25)", value=f"{total_justificados_noturnos}")
+        st.metric(
+            label="🔵 Justificados Noturnos (R$ 25)",
+            value=f"{total_justificados_noturnos}",
+        )
 
     st.markdown("---")
     st.markdown("### ⚙️ Configuração de Pontos Noturnos")
-    st.markdown("Selecione os estabelecimentos que pertencem à categoria de **Turno Noturno** para aplicar automaticamente as regras diferenciadas de pagamento:")
-    
+    st.markdown(
+        "Selecione os estabelecimentos que pertencem à categoria de **Turno Noturno** para aplicar automaticamente as regras diferenciadas de pagamento:"
+    )
+
     with st.form("form_config_noturno"):
         pontos_selecao_noturna = st.multiselect(
             "Estabelecimentos Noturnos:",
             options=df["Identificador_Unico"].tolist(),
-            default=[p for p in lista_noturnos_cadastrados if p in df["Identificador_Unico"].tolist()]
+            default=[
+                p
+                for p in lista_noturnos_cadastrados
+                if p in df["Identificador_Unico"].tolist()
+            ],
         )
-        btn_salvar_noturnos = st.form_submit_button("Salvar Configuração Noturna", type="primary")
-        
+        btn_salvar_noturnos = st.form_submit_button(
+            "Salvar Configuração Noturna", type="primary"
+        )
+
         if btn_salvar_noturnos:
             try:
                 aba_noturnos.clear()
@@ -434,7 +638,9 @@ elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["aute
                 for p in pontos_selecao_noturna:
                     aba_noturnos.append_row([p])
                 st.cache_data.clear()
-                st.success("✅ Configuração de pontos noturnos salva com sucesso!")
+                st.success(
+                    "✅ Configuração de pontos noturnos salva com sucesso!"
+                )
                 st.rerun()
             except Exception as e_noturno:
                 st.error(f"Erro ao salvar pontos noturnos: {e_noturno}")
@@ -445,7 +651,8 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
     st.subheader("🗺️ Mapa Interativo de Pontos por Status")
     st.markdown("---")
 
-    st.markdown("""
+    st.markdown(
+        """
         <div class="legenda-container">
             <h4 style="margin-top: 0; color: #1e3a8a !important;">📌 Legenda e Significado dos Alfinetes no Mapa</h4>
             <p style="margin-bottom: 12px; font-size: 14px;">Consulte abaixo o significado das cores dos marcadores exibidos no mapa interativo:</p>
@@ -456,9 +663,13 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                 <li>🔵 <b>Azul:</b> Justificado</li>
             </ul>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
-    mapa_floripa = folium.Map(location=[-27.5954, -48.5480], zoom_start=14, control_scale=True)
+    mapa_floripa = folium.Map(
+        location=[-27.5954, -48.5480], zoom_start=14, control_scale=True
+    )
 
     def obter_cor_marcador(status):
         status_limpo = str(status).strip().capitalize()
@@ -476,66 +687,99 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
     for _, row in df.iterrows():
         try:
             lat, lon = None, None
-            endereco_completo = str(row.get("Endereço Completo", "")).strip()
-            
+            endereco_completo = str(
+                row.get("Endereço Completo", "")
+            ).strip()
+
             if not endereco_completo or endereco_completo in ["nan", "None"]:
                 rua = str(row.get("Rua", "")).strip()
                 numero = str(row.get("Número", "")).strip()
                 bairro = str(row.get("Bairro", "")).strip()
                 cidade = str(row.get("Cidade", "Florianópolis")).strip()
                 cep = str(row.get("CEP", "")).strip()
-                endereco_completo = f"{rua}, {numero} - {bairro}, {cidade} - SC, {cep}"
+                endereco_completo = (
+                    f"{rua}, {numero} - {bairro}, {cidade} - SC, {cep}"
+                )
 
             lat_geo, lon_geo = geolocalizar_endereco(endereco_completo)
             if lat_geo and lon_geo:
                 lat, lon = float(lat_geo), float(lon_geo)
-            
+
             if lat is None or lon is None:
                 lat, lon = -27.5954, -48.5480
 
             status = row.get("Status", "Pendente")
             destinatario = row.get("Destinatário", "Local")
-            
+
             cor = obter_cor_marcador(status)
             popup_html = f"<b>Estabelecimento:</b> {destinatario}<br><b>Endereço:</b> {endereco_completo}<br><b>Status:</b> {status}"
-            
+
             folium.Marker(
                 location=[lat, lon],
                 popup=folium.Popup(popup_html, max_width=300),
-                icon=folium.Icon(color=cor, icon="info-sign")
+                icon=folium.Icon(color=cor, icon="info-sign"),
             ).add_to(mapa_floripa)
         except Exception:
             continue
 
     st_folium(mapa_floripa, width=1300, height=600)
 
-    st.markdown("""
+    st.markdown(
+        """
         <div class="popup-status-box">
             <h4 style="margin-top: 0; color: #1e3a8a !important;">🔄 Ação Rápida: Atualizar Status de um Ponto</h4>
             <p style="font-size: 14px; margin-bottom: 10px;">Selecione o ponto diretamente na lista abaixo para modificar o seu status na planilha em tempo real:</p>
         </div>
-    """, unsafe_allow_html=True)
+    """,
+        unsafe_allow_html=True,
+    )
 
     with st.form("form_status_mapa"):
         col_map1, col_map2, col_map3 = st.columns([2, 1, 1])
         with col_map1:
-            ponto_sel_mapa = st.selectbox("Escolha o Estabelecimento:", options=df["Identificador_Unico"].tolist())
+            ponto_sel_mapa = st.selectbox(
+                "Escolha o Estabelecimento:",
+                options=df["Identificador_Unico"].tolist(),
+            )
         with col_map2:
-            novo_status_mapa = st.selectbox("Novo Status:", options=LISTA_STATUS)
+            novo_status_mapa = st.selectbox(
+                "Novo Status:", options=LISTA_STATUS
+            )
         with col_map3:
             st.markdown("<br>", unsafe_allow_html=True)
-            btn_atualizar_mapa = st.form_submit_button("💾 Salvar Novo Status", type="primary", use_container_width=True)
+            btn_atualizar_mapa = st.form_submit_button(
+                "💾 Salvar Novo Status", type="primary", use_container_width=True
+            )
 
         if btn_atualizar_mapa:
             try:
-                dados_ponto = df[df["Identificador_Unico"] == ponto_sel_mapa].iloc[0]
+                dados_ponto = df[
+                    df["Identificador_Unico"] == ponto_sel_mapa
+                ].iloc[0]
                 linha_alvo = int(dados_ponto["_linha_sheets"])
-                idx_status_col = cabecalho.index("Status") + 1 if "Status" in cabecalho else 9
-                
+                idx_status_col = (
+                    cabecalho.index("Status") + 1
+                    if "Status" in cabecalho
+                    else 9
+                )
+                idx_data_col = (
+                    cabecalho.index("Data Visita") + 1
+                    if "Data Visita" in cabecalho
+                    else len(cabecalho)
+                )
+
                 sheet.update_cell(linha_alvo, idx_status_col, novo_status_mapa)
-                
+
+                if novo_status_mapa != "Pendente":
+                    data_atual = date.today().strftime("%Y-%m-%d")
+                    sheet.update_cell(
+                        linha_alvo, idx_data_col, data_atual
+                    )
+
                 st.cache_data.clear()
-                st.success(f"✅ Status do estabelecimento **{dados_ponto['Destinatário']}** atualizado para **{novo_status_mapa}** com sucesso!")
+                st.success(
+                    f"✅ Status do estabelecimento **{dados_ponto['Destinatário']}** atualizado para **{novo_status_mapa}** com sucesso!"
+                )
                 st.rerun()
             except Exception as err:
                 st.error(f"❌ Erro ao atualizar status: {err}")
@@ -547,29 +791,57 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
 
     col_bairro, col_dest, col_status = st.columns([1, 1.2, 0.8])
     with col_bairro:
-        todos_bairros = sorted([str(b) for b in df["Bairro"].unique() if str(b).strip() != ""])
-        bairros_sel = st.multiselect("Filtrar por Bairro(s):", options=todos_bairros, default=[])
+        todos_bairros = sorted(
+            [str(b) for b in df["Bairro"].unique() if str(b).strip() != ""]
+        )
+        bairros_sel = st.multiselect(
+            "Filtrar por Bairro(s):", options=todos_bairros, default=[]
+        )
 
     df_filtrado = df.copy()
     if bairros_sel:
-        df_filtrado = df_filtrado[df_filtrado["Bairro"].astype(str).isin(bairros_sel)]
+        df_filtrado = df_filtrado[
+            df_filtrado["Bairro"].astype(str).isin(bairros_sel)
+        ]
 
     with col_dest:
-        todos_destinatarios = sorted([str(d) for d in df_filtrado["Destinatário"].unique() if str(d).strip() != ""])
-        destinatarios_sel = st.multiselect("Filtrar por Destinatário(s):", options=todos_destinatarios, default=[])
+        todos_destinatarios = sorted(
+            [
+                str(d)
+                for d in df_filtrado["Destinatário"].unique()
+                if str(d).strip() != ""
+            ]
+        )
+        destinatarios_sel = st.multiselect(
+            "Filtrar por Destinatário(s):", options=todos_destinatarios, default=[]
+        )
 
     with col_status:
-        status_sel = st.selectbox("Filtrar por Status:", ["Todos"] + LISTA_STATUS)
+        status_sel = st.selectbox(
+            "Filtrar por Status:", ["Todos"] + LISTA_STATUS
+        )
 
     if destinatarios_sel:
-        df_filtrado = df_filtrado[df_filtrado["Destinatário"].astype(str).isin(destinatarios_sel)]
+        df_filtrado = df_filtrado[
+            df_filtrado["Destinatário"].astype(str).isin(destinatarios_sel)
+        ]
     if status_sel != "Todos":
-        df_filtrado = df_filtrado[df_filtrado["Status"].astype(str) == status_sel]
+        df_filtrado = df_filtrado[
+            df_filtrado["Status"].astype(str) == status_sel
+        ]
 
     st.write(f"Exibindo **{len(df_filtrado)}** de **{len(df)}** registros.")
-    df_exibicao = df_filtrado.drop(columns=["_linha_sheets", "Identificador_Unico"], errors="ignore")
+    df_exibicao = df_filtrado.drop(
+        columns=["_linha_sheets", "Identificador_Unico"], errors="ignore"
+    )
 
-    event = st.dataframe(df_exibicao, use_container_width=True, on_select="rerun", selection_mode="single-row", key="tabela_destinatarios")
+    event = st.dataframe(
+        df_exibicao,
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="tabela_destinatarios",
+    )
     rows_selecionadas = event.selection.get("rows", [])
 
     st.markdown("---")
@@ -580,12 +852,20 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
         id_unico = registro_selecionado["Identificador_Unico"]
 
         with col_info:
-            st.success(f"📌 **Selecionado:** {registro_selecionado['Destinatário']} (Linha {registro_selecionado['_linha_sheets']} no Sheets)")
+            st.success(
+                f"📌 **Selecionado:** {registro_selecionado['Destinatário']} (Linha {registro_selecionado['_linha_sheets']} no Sheets)"
+            )
         with col_btn:
-            if st.button("✏️ Editar Registro Selecionado", type="primary", use_container_width=True):
+            if st.button(
+                "✏️ Editar Registro Selecionado",
+                type="primary",
+                use_container_width=True,
+            ):
                 st.session_state["destinatario_para_editar"] = id_unico
                 st.session_state["mensagem_sucesso_edicao"] = None
-                st.session_state["menu_selecionado"] = "✏️ Editar Registro Existente"
+                st.session_state["menu_selecionado"] = (
+                    "✏️ Editar Registro Existente"
+                )
                 st.rerun()
 
 
@@ -597,16 +877,27 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
         st.success(st.session_state["mensagem_sucesso_edicao"])
         if st.button("📋 Voltar para a Tabela de Dados", type="secondary"):
             st.session_state["mensagem_sucesso_edicao"] = None
-            st.session_state["menu_selecionado"] = "📋 Tabela de Dados e Ações"
+            st.session_state["menu_selecionado"] = (
+                "📋 Tabela de Dados e Ações"
+            )
             st.rerun()
         st.markdown("---")
 
     lista_identificadores = df["Identificador_Unico"].tolist()
     idx_default = 0
-    if st.session_state["destinatario_para_editar"] in lista_identificadores:
-        idx_default = lista_identificadores.index(st.session_state["destinatario_para_editar"])
+    if (
+        st.session_state["destinatario_para_editar"]
+        in lista_identificadores
+    ):
+        idx_default = lista_identificadores.index(
+            st.session_state["destinatario_para_editar"]
+        )
 
-    dest_sel = st.selectbox("Selecione o Destinatário para editar:", options=lista_identificadores, index=idx_default)
+    dest_sel = st.selectbox(
+        "Selecione o Destinatário para editar:",
+        options=lista_identificadores,
+        index=idx_default,
+    )
 
     if dest_sel:
         st.session_state["destinatario_para_editar"] = dest_sel
@@ -614,32 +905,75 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
         linha_real = int(dados["_linha_sheets"])
 
         with st.form("f_edit"):
-            n_dest = st.text_input("Destinatário", value=str(dados["Destinatário"]))
+            n_dest = st.text_input(
+                "Destinatário", value=str(dados["Destinatário"])
+            )
             n_rua = st.text_input("Rua", value=str(dados.get("Rua", "")))
             n_num = st.text_input("Número", value=str(dados.get("Numero", "")))
-            n_bairro = st.text_input("Bairro", value=str(dados.get("Bairro", "")))
-            n_cid = st.text_input("Cidade", value=str(dados.get("Cidade", "Florianópolis")))
-            n_est = st.text_input("Estado", value=str(dados.get("Estado", "SC")))
+            n_bairro = st.text_input(
+                "Bairro", value=str(dados.get("Bairro", ""))
+            )
+            n_cid = st.text_input(
+                "Cidade", value=str(dados.get("Cidade", "Florianópolis"))
+            )
+            n_est = st.text_input(
+                "Estado", value=str(dados.get("Estado", "SC"))
+            )
             n_cep = st.text_input("CEP", value=str(dados.get("CEP", "")))
-            
-            st_atual = str(dados["Status"]).strip().capitalize()
-            idx_st = LISTA_STATUS.index(st_atual) if st_atual in LISTA_STATUS else 0
-            n_st = st.selectbox("Status", LISTA_STATUS, index=idx_st)
-            
-            n_lat = st.text_input("Latitude", value=str(dados.get("Latitude", "")))
-            n_lng = st.text_input("Longitude", value=str(dados.get("Longitude", "")))
 
-            if st.form_submit_button("💾 Salvar Alterações na Planilha", type="primary"):
+            st_atual = str(dados["Status"]).strip().capitalize()
+            idx_st = (
+                LISTA_STATUS.index(st_atual)
+                if st_atual in LISTA_STATUS
+                else 0
+            )
+            n_st = st.selectbox("Status", LISTA_STATUS, index=idx_st)
+
+            n_lat = st.text_input(
+                "Latitude", value=str(dados.get("Latitude", ""))
+            )
+            n_lng = st.text_input(
+                "Longitude", value=str(dados.get("Longitude", ""))
+            )
+            n_data_visita = st.text_input(
+                "Data Visita", value=str(dados.get("Data Visita", ""))
+            )
+
+            if st.form_submit_button(
+                "💾 Salvar Alterações na Planilha", type="primary"
+            ):
                 try:
                     n_end_comp = f"{n_rua}, {n_num} - {n_bairro}, {n_cid} - {n_est}, CEP {n_cep}, Brasil"
                     if not n_lat or not n_lng:
                         n_lat, n_lng = geolocalizar_endereco(n_end_comp)
 
-                    novos_valores = [n_dest, n_rua, n_num, n_bairro, n_cid, n_est, n_cep, n_end_comp, n_st, n_lat, n_lng]
-                    sheet.update(range_name=f"A{linha_real}:K{linha_real}", values=[novos_valores])
+                    if n_st != "Pendente" and not n_data_visita.strip():
+                        n_data_visita = date.today().strftime("%Y-%m-%d")
+
+                    novos_valores = [
+                        n_dest,
+                        n_rua,
+                        n_num,
+                        n_bairro,
+                        n_cid,
+                        n_est,
+                        n_cep,
+                        n_end_comp,
+                        n_st,
+                        n_lat,
+                        n_lng,
+                        n_data_visita,
+                    ]
                     
+                    sheet.update(
+                        range_name=f"A{linha_real}:L{linha_real}",
+                        values=[novos_valores],
+                    )
+
                     st.cache_data.clear()
-                    st.session_state["mensagem_sucesso_edicao"] = f"✅ Alteração salva com sucesso para **{n_dest}**!"
+                    st.session_state[
+                        "mensagem_sucesso_edicao"
+                    ] = f"✅ Alteração salva com sucesso para **{n_dest}**!"
                     st.rerun()
                 except Exception as err:
                     st.error(f"❌ Erro ao salvar na planilha: {err}")
@@ -663,7 +997,27 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
                 try:
                     end_comp = f"{rua}, {num} - {bairro}, {cid} - {est}, CEP {cep}, Brasil"
                     lat, lng = geolocalizar_endereco(end_comp)
-                    sheet.append_row([dest, rua, num, bairro, cid, est, cep, end_comp, st_novo, lat, lng])
+                    data_visita_novo = (
+                        date.today().strftime("%Y-%m-%d")
+                        if st_novo != "Pendente"
+                        else ""
+                    )
+                    sheet.append_row(
+                        [
+                            dest,
+                            rua,
+                            num,
+                            bairro,
+                            cid,
+                            est,
+                            cep,
+                            end_comp,
+                            st_novo,
+                            lat,
+                            lng,
+                            data_visita_novo,
+                        ]
+                    )
                     st.success("✅ Novo destinatário adicionado ao Google Sheets!")
                     st.cache_data.clear()
                     st.rerun()
@@ -673,46 +1027,78 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
 
 # --- ABA 6: CUSTOS LOGÍSTICOS E FROTA ---
 elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticado"]:
-    st.subheader("🚚 Controle de Custos Logísticos (Abastecimentos e Manutenções)")
+    st.subheader(
+        "🚚 Controle de Custos Logísticos (Abastecimentos e Manutenções)"
+    )
     st.markdown("---")
 
-    aba_custos = obter_ou_criar_aba("Controle_Custos", ["Data", "Tipo de Registro", "Local / Posto", "Odômetro (KM)", "Custo (R$)", "Litros"])
+    aba_custos = obter_ou_criar_aba(
+        "Controle_Custos",
+        [
+            "Data",
+            "Tipo de Registro",
+            "Local / Posto",
+            "Odômetro (KM)",
+            "Custo (R$)",
+            "Litros",
+        ],
+    )
 
     val_custos = aba_custos.get_all_values()
     if len(val_custos) > 1:
         df_custos = pd.DataFrame(val_custos[1:], columns=val_custos[0])
         df_custos["_linha_sheets"] = range(2, len(val_custos) + 1)
     else:
-        df_custos = pd.DataFrame(columns=["Data", "Tipo de Registro", "Local / Posto", "Odômetro (KM)", "Custo (R$)", "Litros", "_linha_sheets"])
+        df_custos = pd.DataFrame(
+            columns=[
+                "Data",
+                "Tipo de Registro",
+                "Local / Posto",
+                "Odômetro (KM)",
+                "Custo (R$)",
+                "Litros",
+                "_linha_sheets",
+            ]
+        )
 
-    tab_novo_lancamento, tab_editar_lancamento, tab_tabela_custos, tab_relatorio_custos = st.tabs([
-        "➕ Novo Lançamento", 
-        "✏️ Editar Lançamento", 
-        "📋 Tabela de Registros", 
-        "📊 Indicadores e Métricas"
-    ])
+    tab_novo_lancamento, tab_editar_lancamento, tab_tabela_custos, tab_relatorio_custos = st.tabs(
+        [
+            "➕ Novo Lançamento",
+            "✏️ Editar Lançamento",
+            "📋 Tabela de Registros",
+            "📊 Indicadores e Métricas",
+        ]
+    )
 
     with tab_novo_lancamento:
         st.markdown("### Adicionar Novo Registro de Custo / Abastecimento")
         with st.form("form_novo_custo"):
             c_data = st.date_input("Data", value=date.today())
             c_tipo = st.selectbox("Tipo de Registro", TIPOS_REGISTRO)
-            c_local = st.text_input("Local / Posto (Ex: Primos Pequeno Príncipe, Posto Ipiranga, Moto Moto)")
+            c_local = st.text_input(
+                "Local / Posto (Ex: Primos Pequeno Príncipe, Posto Ipiranga, Moto Moto)"
+            )
             c_odometro = st.text_input("Odômetro (KM) (Ex: 925.690)")
             c_custo = st.text_input("Custo (R$) (Ex: 45,09)")
-            c_litros = st.text_input("Litros (Deixar em branco se for manutenção)")
+            c_litros = st.text_input(
+                "Litros (Deixar em branco se for manutenção)"
+            )
 
             if st.form_submit_button("Salvar Registro", type="primary"):
                 try:
-                    aba_custos.append_row([
-                        str(c_data),
-                        c_tipo,
-                        c_local,
-                        c_odometro,
-                        c_custo,
-                        c_litros
-                    ])
-                    st.success("✅ Registro adicionado com sucesso ao Google Sheets!")
+                    aba_custos.append_row(
+                        [
+                            str(c_data),
+                            c_tipo,
+                            c_local,
+                            c_odometro,
+                            c_custo,
+                            c_litros,
+                        ]
+                    )
+                    st.success(
+                        "✅ Registro adicionado com sucesso ao Google Sheets!"
+                    )
                     st.cache_data.clear()
                     st.rerun()
                 except Exception as err:
@@ -722,33 +1108,66 @@ elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticad
         st.markdown("### ✏️ Editar Lançamento Existente")
         if not df_custos.empty:
             df_custos["Identificador_Custo"] = df_custos.apply(
-                lambda r: f"Linha {r['_linha_sheets']} | {r['Data']} - {r['Tipo de Registro']} ({r['Local / Posto']} - {r['Odômetro (KM)']})", 
-                axis=1
+                lambda r: f"Linha {r['_linha_sheets']} | {r['Data']} - {r['Tipo de Registro']} ({r['Local / Posto']} - {r['Odômetro (KM)']})",
+                axis=1,
             )
-            
-            sel_custo_edit = st.selectbox("Selecione o registro que deseja alterar:", options=df_custos["Identificador_Custo"].tolist())
-            
+
+            sel_custo_edit = st.selectbox(
+                "Selecione o registro que deseja alterar:",
+                options=df_custos["Identificador_Custo"].tolist(),
+            )
+
             if sel_custo_edit:
-                dados_c = df_custos[df_custos["Identificador_Custo"] == sel_custo_edit].iloc[0]
+                dados_c = df_custos[
+                    df_custos["Identificador_Custo"] == sel_custo_edit
+                ].iloc[0]
                 l_real = int(dados_c["_linha_sheets"])
 
                 with st.form("form_edicao_custo"):
                     e_data = st.text_input("Data", value=str(dados_c["Data"]))
-                    
-                    t_atual = str(dados_c["Tipo de Registro"]).strip()
-                    idx_t = TIPOS_REGISTRO.index(t_atual) if t_atual in TIPOS_REGISTRO else 0
-                    e_tipo = st.selectbox("Tipo de Registro", TIPOS_REGISTRO, index=idx_t)
-                    
-                    e_local = st.text_input("Local / Posto", value=str(dados_c["Local / Posto"]))
-                    e_odometro = st.text_input("Odômetro (KM)", value=str(dados_c["Odômetro (KM)"]))
-                    e_custo = st.text_input("Custo (R$)", value=str(dados_c["Custo (R$)"]))
-                    e_litros = st.text_input("Litros", value=str(dados_c["Litros"]))
 
-                    if st.form_submit_button("💾 Salvar Alterações", type="primary"):
+                    t_atual = str(dados_c["Tipo de Registro"]).strip()
+                    idx_t = (
+                        TIPOS_REGISTRO.index(t_atual)
+                        if t_atual in TIPOS_REGISTRO
+                        else 0
+                    )
+                    e_tipo = st.selectbox(
+                        "Tipo de Registro", TIPOS_REGISTRO, index=idx_t
+                    )
+
+                    e_local = st.text_input(
+                        "Local / Posto", value=str(dados_c["Local / Posto"])
+                    )
+                    e_odometro = st.text_input(
+                        "Odômetro (KM)", value=str(dados_c["Odômetro (KM)"])
+                    )
+                    e_custo = st.text_input(
+                        "Custo (R$)", value=str(dados_c["Custo (R$)"])
+                    )
+                    e_litros = st.text_input(
+                        "Litros", value=str(dados_c["Litros"])
+                    )
+
+                    if st.form_submit_button(
+                        "💾 Salvar Alterações", type="primary"
+                    ):
                         try:
-                            novos_valores_custo = [e_data, e_tipo, e_local, e_odometro, e_custo, e_litros]
-                            aba_custos.update(range_name=f"A{l_real}:F{l_real}", values=[novos_valores_custo])
-                            st.success(f"✅ Registro da linha {l_real} atualizado com sucesso!")
+                            novos_valores_custo = [
+                                e_data,
+                                e_tipo,
+                                e_local,
+                                e_odometro,
+                                e_custo,
+                                e_litros,
+                            ]
+                            aba_custos.update(
+                                range_name=f"A{l_real}:F{l_real}",
+                                values=[novos_valores_custo],
+                            )
+                            st.success(
+                                f"✅ Registro da linha {l_real} atualizado com sucesso!"
+                            )
                             st.cache_data.clear()
                             st.rerun()
                         except Exception as err:
@@ -759,50 +1178,98 @@ elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticad
     with tab_tabela_custos:
         st.markdown("### Histórico Completo de Lançamentos")
         if not df_custos.empty:
-            st.dataframe(df_custos.drop(columns=["_linha_sheets", "Identificador_Custo"], errors="ignore"), use_container_width=True)
+            st.dataframe(
+                df_custos.drop(
+                    columns=["_linha_sheets", "Identificador_Custo"],
+                    errors="ignore",
+                ),
+                use_container_width=True,
+            )
         else:
             st.info("Ainda não há registros na aba de custos.")
 
     with tab_relatorio_custos:
-        st.markdown("### 📊 Indicadores de Consumo (Km/L) e Manutenção Preventiva")
+        st.markdown(
+            "### 📊 Indicadores de Consumo (Km/L) e Manutenção Preventiva"
+        )
 
         if not df_custos.empty:
             df_analise = df_custos.copy()
-            df_analise["Odometro_Clean"] = pd.to_numeric(df_analise["Odômetro (KM)"].astype(str).str.replace(".", "", regex=False).str.replace(",", ".", regex=False), errors="coerce")
-            
+            df_analise["Odometro_Clean"] = pd.to_numeric(
+                df_analise["Odômetro (KM)"]
+                .astype(str)
+                .str.replace(".", "", regex=False)
+                .str.replace(",", ".", regex=False),
+                errors="coerce",
+            )
+
             df_analise["Custo_Clean"] = pd.to_numeric(
                 df_analise["Custo (R$)"]
                 .astype(str)
                 .str.replace("R$", "", regex=False)
                 .str.replace(".", "", regex=False)
                 .str.replace(",", ".", regex=False)
-                .str.strip(), 
-                errors="coerce"
+                .str.strip(),
+                errors="coerce",
             ).fillna(0)
 
             df_analise["Litros_Clean"] = pd.to_numeric(
                 df_analise["Litros"]
                 .astype(str)
                 .str.replace(",", ".", regex=False)
-                .str.strip(), 
-                errors="coerce"
+                .str.strip(),
+                errors="coerce",
             ).fillna(0)
 
-            df_abast_calc = df_analise[df_analise["Tipo de Registro"].str.contains("Abastecimento", case=False, na=False)].sort_values(by="Odometro_Clean")
+            df_abast_calc = df_analise[
+                df_analise["Tipo de Registro"].str.contains(
+                    "Abastecimento", case=False, na=False
+                )
+            ].sort_values(by="Odometro_Clean")
 
             if len(df_abast_calc) >= 2:
-                df_abast_calc["Delta_Km"] = df_abast_calc["Odometro_Clean"].diff()
+                df_abast_calc["Delta_Km"] = df_abast_calc[
+                    "Odometro_Clean"
+                ].diff()
                 df_abast_calc["Km_Por_Litro"] = df_abast_calc.apply(
-                    lambda r: round(r["Delta_Km"] / r["Litros_Clean"], 2) if r["Litros_Clean"] > 0 and r["Delta_Km"] > 0 else 0, 
-                    axis=1
+                    lambda r: round(
+                        r["Delta_Km"] / r["Litros_Clean"], 2
+                    )
+                    if r["Litros_Clean"] > 0 and r["Delta_Km"] > 0
+                    else 0,
+                    axis=1,
                 )
 
-                media_geral_km_l = df_abast_calc[df_abast_calc["Km_Por_Litro"] > 0]["Km_Por_Litro"].mean()
-                st.metric("⛽ Consumo Médio Geral", f"{media_geral_km_l:.2f} km/l" if not pd.isna(media_geral_km_l) else "Calculando...")
+                media_geral_km_l = df_abast_calc[
+                    df_abast_calc["Km_Por_Litro"] > 0
+                ]["Km_Por_Litro"].mean()
+                st.metric(
+                    "⛽ Consumo Médio Geral",
+                    f"{media_geral_km_l:.2f} km/l"
+                    if not pd.isna(media_geral_km_l)
+                    else "Calculando...",
+                )
 
-                st.markdown("#### Histórico Calculado de Consumo (Km/L por Abastecimento)")
-                st.dataframe(df_abast_calc[["Data", "Local / Posto", "Odômetro (KM)", "Litros", "Km_Por_Litro"]], use_container_width=True)
+                st.markdown(
+                    "#### Histórico Calculado de Consumo (Km/L por Abastecimento)"
+                )
+                st.dataframe(
+                    df_abast_calc[
+                        [
+                            "Data",
+                            "Local / Posto",
+                            "Odômetro (KM)",
+                            "Litros",
+                            "Km_Por_Litro",
+                        ]
+                    ],
+                    use_container_width=True,
+                )
             else:
-                st.info("Insira pelo menos dois registros de abastecimento com odômetro e litros válidos para calcular o rendimento médio em km/l.")
+                st.info(
+                    "Insira pelo menos dois registros de abastecimento com odômetro e litros válidos para calcular o rendimento médio em km/l."
+                )
         else:
-            st.info("Ainda não há dados suficientes para gerar relatórios de custos.")
+            st.info(
+                "Ainda não há dados suficientes para gerar relatórios de custos."
+            )

@@ -241,9 +241,7 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     st.subheader("📊 Dashboard Auditorias MooveChain")
     st.markdown("---")
 
-    # --- FILTROS DINÂMICOS (ESTADO, CIDADE, BAIRRO E STATUS) ---
     st.markdown("### 🔍 Filtros Dinâmicos")
-    
     col_f1, col_f2, col_f3, col_f4 = st.columns(4)
     
     with col_f1:
@@ -266,7 +264,6 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         opcoes_status_filtro = ["Todos"] + LISTA_STATUS
         status_sel = st.multiselect("Filtrar por Status:", options=opcoes_status_filtro, default=["Todos"])
 
-    # --- APLICAÇÃO DOS FILTROS NO DATAFRAME DO DASHBOARD ---
     df_dashboard = df.copy()
     if estados_sel:
         df_dashboard = df_dashboard[df_dashboard["Estado"].astype(str).isin(estados_sel)]
@@ -293,7 +290,6 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     restantes = total_geral - concluidos
     pct_conclusao = (concluidos / total_geral * 100) if total_geral > 0 else 0.0
 
-    # 1. PROGRESSO GLOBAL NO PRIMEIRO LUGAR
     st.markdown("### 1. 🎯 Progresso Global de Auditorias")
     st.progress(pct_conclusao / 100 if total_geral > 0 else 0.0)
     st.caption(f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado (Total filtrado: {total_geral} pontos)")
@@ -313,7 +309,6 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
 
     st.markdown("---")
 
-    # Contagens individuais para cada status
     qtd_auditado = len(df_dashboard[df_dashboard["Status"] == "Auditado"])
     qtd_pendente = len(df_dashboard[df_dashboard["Status"] == "Pendente"])
     qtd_cancelado = len(df_dashboard[df_dashboard["Status"] == "Cancelado"])
@@ -369,7 +364,75 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     else:
         st.info("Nenhum dado encontrado para exibir no gráfico com os filtros selecionados.")
 
-# --- ABA 2: MAPA INTERATIVO DINÂMICO (FOLIUM) ---
+    # --- NOVO BLOCO: DASHBOARD FINANCEIRO / GANHOS ---
+    st.markdown("---")
+    st.markdown("### 4. 💰 Projeção e Controle de Ganhos (Faturamento)")
+
+    try:
+        aba_noturnos = obter_ou_criar_aba("Pontos_Noturnos", ["Identificador_Unico"])
+        valores_noturnos = aba_noturnos.get_all_values()
+        lista_noturnos_cadastrados = [row[0] for row in valores_noturnos[1:]] if len(valores_noturnos) > 1 else []
+    except Exception:
+        lista_noturnos_cadastrados = []
+
+    df_dashboard["Eh_Noturno"] = df_dashboard["Identificador_Unico"].isin(lista_noturnos_cadastrados)
+
+    def calcular_ganho_linha(row):
+        status = row["Status"]
+        noturno = row["Eh_Noturno"]
+        if noturno:
+            if status == "Auditado":
+                return 35.0
+            elif status == "Justificado":
+                return 25.0
+            else:
+                return 0.0
+        else:
+            if status == "Auditado":
+                return 25.0
+            else:
+                return 0.0
+
+    df_dashboard["Ganho_R$"] = df_dashboard.apply(calcular_ganho_linha, axis=1)
+
+    total_ganho = df_dashboard["Ganho_R$"].sum()
+    total_auditados_normais = len(df_dashboard[(df_dashboard["Status"] == "Auditado") & (~df_dashboard["Eh_Noturno"])])
+    total_auditados_noturnos = len(df_dashboard[(df_dashboard["Status"] == "Auditado") & (df_dashboard["Eh_Noturno"])])
+    total_justificados_noturnos = len(df_dashboard[(df_dashboard["Status"] == "Justificado") & (df_dashboard["Eh_Noturno"])])
+
+    col_fin1, col_fin2, col_fin3, col_fin4 = st.columns(4)
+    with col_fin1:
+        st.metric(label="💵 Faturamento Total Estimado", value=f"R$ {total_ganho:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    with col_fin2:
+        st.metric(label="🟢 Auditados Padrão (R$ 25)", value=f"{total_auditados_normais}")
+    with col_fin3:
+        st.metric(label="🌙 Auditados Noturnos (R$ 35)", value=f"{total_auditados_noturnos}")
+    with col_fin4:
+        st.metric(label="🔵 Justificados Noturnos (R$ 25)", value=f"{total_justificados_noturnos}")
+
+    with st.expander("⚙️ Gerenciar Marcação de Pontos Noturnos"):
+        st.markdown("Selecione os estabelecimentos que pertencem à categoria de **Turno Noturno** para aplicar automaticamente as regras diferenciadas de pagamento:")
+        with st.form("form_config_noturno"):
+            pontos_selecao_noturna = st.multiselect(
+                "Estabelecimentos Noturnos:",
+                options=df["Identificador_Unico"].tolist(),
+                default=[p for p in lista_noturnos_cadastrados if p in df["Identificador_Unico"].tolist()]
+            )
+            btn_salvar_noturnos = st.form_submit_button("Salvar Configuração Noturna", type="primary")
+            
+            if btn_salvar_noturnos:
+                try:
+                    aba_noturnos.clear()
+                    aba_noturnos.append_row(["Identificador_Unico"])
+                    for p in pontos_selecao_noturna:
+                        aba_noturnos.append_row([p])
+                    st.cache_data.clear()
+                    st.success("✅ Configuração de pontos noturnos salva com sucesso!")
+                    st.rerun()
+                except Exception as e_noturno:
+                    st.error(f"Erro ao salvar pontos noturnos: {e_noturno}")
+
+
 # --- ABA 2: MAPA INTERATIVO DINÂMICO (FOLIUM) ---
 elif opcao == "🗺️ Visualizar Mapa de Pontos":
     st.subheader("🗺️ Mapa Interativo de Pontos por Status")
@@ -403,15 +466,11 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
         else:
             return "gray"
 
-    # Itera sobre cada linha da planilha e obtém a geolocalização limpa
     for _, row in df.iterrows():
         try:
             lat, lon = None, None
-            
-            # Monta o endereço completo estruturado que já existe na sua planilha (última coluna)
             endereco_completo = str(row.get("Endereço Completo", "")).strip()
             
-            # Se não tiver o endereço completo pronto, monta usando Rua, Número, Bairro e CEP
             if not endereco_completo or endereco_completo in ["nan", "None"]:
                 rua = str(row.get("Rua", "")).strip()
                 numero = str(row.get("Número", "")).strip()
@@ -420,18 +479,15 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                 cep = str(row.get("CEP", "")).strip()
                 endereco_completo = f"{rua}, {numero} - {bairro}, {cidade} - SC, {cep}"
 
-            # Tenta geolocalizar o endereço real na base de dados do mapa
             lat_geo, lon_geo = geolocalizar_endereco(endereco_completo)
             if lat_geo and lon_geo:
                 lat, lon = float(lat_geo), float(lon_geo)
             
-            # Fallback de segurança caso a API falhe para algum endereço específico
             if lat is None or lon is None:
                 lat, lon = -27.5954, -48.5480
 
             status = row.get("Status", "Pendente")
             destinatario = row.get("Destinatário", "Local")
-            bairro = row.get("Bairro", "Não informado")
             
             cor = obter_cor_marcador(status)
             popup_html = f"<b>Estabelecimento:</b> {destinatario}<br><b>Endereço:</b> {endereco_completo}<br><b>Status:</b> {status}"
@@ -446,7 +502,6 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
 
     st_folium(mapa_floripa, width=1300, height=600)
 
-    # --- PAINEL FLUTUANTE ABAIXO DO MAPA PARA ALTERAR STATUS ---
     st.markdown("""
         <div class="popup-status-box">
             <h4 style="margin-top: 0; color: #1e3a8a !important;">🔄 Ação Rápida: Atualizar Status de um Ponto</h4>
@@ -477,6 +532,7 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                 st.rerun()
             except Exception as err:
                 st.error(f"❌ Erro ao atualizar status: {err}")
+
 
 # --- ABA 3: TABELA DE DADOS E AÇÕES ---
 elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:
@@ -740,21 +796,6 @@ elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticad
                 st.markdown("#### Histórico Calculado de Consumo (Km/L por Abastecimento)")
                 st.dataframe(df_abast_calc[["Data", "Local / Posto", "Odômetro (KM)", "Litros", "Km_Por_Litro"]], use_container_width=True)
             else:
-                st.info("Insira mais abastecimentos para calcular a média de km por litro.")
-
-            st.markdown("---")
-            st.markdown("#### 🛠️ Controle de Troca de Óleo por KM Rodado")
-            df_oleo = df_analise[df_analise["Tipo de Registro"].str.contains("Óleo|oleo", case=False, na=False)].sort_values(by="Odometro_Clean")
-            if not df_oleo.empty:
-                st.dataframe(df_oleo[["Data", "Tipo de Registro", "Local / Posto", "Odômetro (KM)", "Custo (R$)"]], use_container_width=True)
-                
-                ultimo_oleo = df_oleo.iloc[-1]["Odometro_Clean"]
-                odometro_atual_geral = df_analise["Odometro_Clean"].max()
-                
-                if not pd.isna(ultimo_oleo) and not pd.isna(odometro_atual_geral):
-                    km_desde_troca = odometro_atual_geral - ultimo_oleo
-                    st.metric("🔧 Quilometragem rodada desde a última troca de óleo", f"{km_desde_troca:,.0f} km".replace(",", "."))
-            else:
-                st.info("Nenhum registro de troca de óleo encontrado para realizar o comparativo.")
+                st.info("Insira pelo menos dois registros de abastecimento com odômetro e litros válidos para calcular o rendimento médio em km/l.")
         else:
-            st.info("Adicione registros na aba de custos para visualizar os relatórios.")
+            st.info("Ainda não há dados suficientes para gerar relatórios de custos.")

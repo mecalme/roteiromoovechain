@@ -72,9 +72,19 @@ def carregar_dados():
     if sheet is None:
         return pd.DataFrame(), []
     
-    dados = sheet.get_all_records()
-    cabecalho = sheet.row_values(1)
-    df = pd.DataFrame(dados)
+    try:
+        # Tenta o método padrão por registros
+        dados = sheet.get_all_records()
+        cabecalho = sheet.row_values(1)
+        df = pd.DataFrame(dados)
+    except Exception:
+        # Fallback seguro caso haja inconsistência nas linhas do Sheets
+        todos_valores = sheet.get_all_values()
+        if not todos_valores or len(todos_valores) < 2:
+            return pd.DataFrame(), []
+        cabecalho = todos_valores[0]
+        dados = todos_valores[1:]
+        df = pd.DataFrame(dados, columns=cabecalho)
     
     df["_linha_sheets"] = range(2, len(df) + 2)
     
@@ -100,7 +110,7 @@ st.sidebar.markdown("---")
 st.sidebar.info("💡 **Dica:** As alterações feitas no status salvam diretamente na sua planilha do Google Drive em tempo real.")
 
 if df.empty:
-    st.warning("⚠️ Nenhum dado encontrado ou planilha vazia. Verifique a conexão com o Google Sheets.")
+    st.warning("⚠️ Nenhum dado encontrado ou planilha vazia. Verifique se a primeira aba da planilha possui o cabeçalho preenchido na linha 1.")
 else:
     # --- ABA 1: MAPA INTERATIVO DINÂMICO (FOLIUM) ---
     if opcao == "🗺️ Visualizar Mapa de Pontos":

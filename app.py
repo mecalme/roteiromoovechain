@@ -407,4 +407,132 @@ elif opcao == "➕ Novo Registro" and st.session_state["autenticado"]:
 # ABA 4: EDITAR REGISTRO EXISTENTE (COM DATA PREDETERMINADA E VOLTAR PERSISTENTE)
 # =========================================================================
 elif opcao == "✏️ Editar Registro Existente" and st.session_state["autenticado"]:
-  st.subheader("
+  st.subheader("✏️ Editar Registro na Planilha")
+  st.markdown("---")
+
+  if df.empty:
+    st.warning("Nenhum registro disponível para edição.")
+  else:
+    if st.session_state.get("mensagem_sucesso_edicao"):
+      st.success(st.session_state["mensagem_sucesso_edicao"])
+      if st.button("📋 Voltar para a Tabela de Dados", type="secondary"):
+        st.session_state["mensagem_sucesso_edicao"] = None
+        st.session_state["menu_selecionado"] = "📋 Tabela de Dados e Ações"
+        st.rerun()
+      st.markdown("---")
+
+    lista_identificadores = df["Identificador_Unico"].tolist()
+    idx_default = 0
+    if st.session_state["destinatario_para_editar"] in lista_identificadores:
+      idx_default = lista_identificadores.index(
+          st.session_state["destinatario_para_editar"]
+      )
+
+    dest_sel = st.selectbox(
+        "Selecione o estabelecimento para editar:",
+        options=lista_identificadores,
+        index=idx_default,
+    )
+
+    if dest_sel:
+      st.session_state["destinatario_para_editar"] = dest_sel
+      dados = df[df["Identificador_Unico"] == dest_sel].iloc[0]
+      linha_real = int(dados["_linha_sheets"])
+
+      # Tratamento da Data (Predeterminada com hoje ou a existente)
+      data_existente_str = str(dados.get("Data Visita", "")).strip()
+      if data_existente_str and data_existente_str not in ["nan", "None", ""]:
+        try:
+          data_padrao = datetime.strptime(data_existente_str, "%Y-%m-%d").date()
+        except ValueError:
+          data_padrao = date.today()
+      else:
+        data_padrao = date.today()
+
+      with st.form("f_edit"):
+        n_data = st.date_input(
+            "Data do Registro / Visita",
+            value=data_padrao,
+            help=(
+                "Pré-preenchido com a data atual por padrão. Permite alteração"
+                " para datas anteriores caso necessário."
+            ),
+        )
+        n_dest = st.text_input("Destinatário", value=str(dados["Destinatário"]))
+        n_rua = st.text_input("Rua", value=str(dados.get("Rua", "")))
+        n_num = st.text_input("Número", value=str(dados.get("Numero", "")))
+        n_bairro = st.text_input("Bairro", value=str(dados.get("Bairro", "")))
+        n_cid = st.text_input(
+            "Cidade", value=str(dados.get("Cidade", "Florianópolis"))
+        )
+        n_est = st.text_input("Estado", value=str(dados.get("Estado", "SC")))
+        n_cep = st.text_input("CEP", value=str(dados.get("CEP", "")))
+
+        st_atual = str(dados["Status"]).strip().capitalize()
+        idx_st = (
+            LISTA_STATUS.index(st_atual) if st_atual in LISTA_STATUS else 0
+        )
+        n_status = st.selectbox("Status", LISTA_STATUS, index=idx_st)
+
+        if st.form_submit_button("💾 Salvar Alterações", type="primary"):
+          try:
+            n_end_comp = f"{n_rua}, {n_num} - {n_bairro}, {n_cid} - {n_est}, CEP {n_cep}, Brasil"
+
+            lat_antiga = str(dados.get("Latitude", ""))
+            lon_antiga = str(dados.get("Longitude", ""))
+            rua_antiga = str(dados.get("Rua", ""))
+
+            if n_rua != rua_antiga or not lat_antiga or not lon_antiga:
+              nova_lat, nova_lon = geolocalizar_endereco(n_end_comp)
+            else:
+              nova_lat, nova_lon = lat_antiga, lon_antiga
+
+            cabecalho_atual = [str(c).strip() for c in sheet.row_values(1)]
+
+            def get_col_idx(nome):
+              return (
+                  cabecalho_atual.index(nome) + 1
+                  if nome in cabecalho_atual
+                  else None
+              )
+
+            if get_col_idx("Destinatário"):
+              sheet.update_cell(
+                  linha_real, get_col_idx("Destinatário"), n_dest
+              )
+            if get_col_idx("Rua"):
+              sheet.update_cell(linha_real, get_col_idx("Rua"), n_rua)
+            if get_col_idx("Numero"):
+              sheet.update_cell(linha_real, get_col_idx("Numero"), n_num)
+            if get_col_idx("Bairro"):
+              sheet.update_cell(linha_real, get_col_idx("Bairro"), n_bairro)
+            if get_col_idx("Cidade"):
+              sheet.update_cell(linha_real, get_col_idx("Cidade"), n_cid)
+            if get_col_idx("Estado"):
+              sheet.update_cell(linha_real, get_col_idx("Estado"), n_est)
+            if get_col_idx("CEP"):
+              sheet.update_cell(linha_real, get_col_idx("CEP"), n_cep)
+            if get_col_idx("Status"):
+              sheet.update_cell(linha_real, get_col_idx("Status"), n_status)
+            if get_col_idx("Data Visita"):
+              sheet.update_cell(
+                  linha_real,
+                  get_col_idx("Data Visita"),
+                  n_data.strftime("%Y-%m-%d"),
+              )
+            if nova_lat and nova_lon:
+              if get_col_idx("Latitude"):
+                sheet.update_cell(linha_real, get_col_idx("Latitude"), nova_lat)
+              if get_col_idx("Longitude"):
+                sheet.update_cell(
+                    linha_real, get_col_idx("Longitude"), nova_lon
+                )
+
+            st.cache_data.clear()
+            st.session_state["mensagem_sucesso_edicao"] = (
+                f"✅ O registro de **{n_dest}** foi atualizado com sucesso na"
+                " planilha!"
+            )
+            st.rerun()
+          except Exception as e:
+            st.error(f"❌ Erro ao atualizar o registro no Google Sheets: {e}")

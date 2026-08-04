@@ -1,5 +1,6 @@
 from datetime import date
 import re
+import time
 import folium
 from geopy.geocoders import Nominatim
 import gspread
@@ -127,7 +128,7 @@ else:
 
 st.sidebar.markdown("---")
 
-# --- GERENCIAMENTO DE ESTADO DO MENU ---
+# --- GERENCIAMENTO DE ESTADO DO MENU REFORMULADO ---
 if st.session_state["autenticado"]:
     OPCOES_MENU = [
         "📊 Dashboard Auditorias MooveChain",
@@ -136,6 +137,7 @@ if st.session_state["autenticado"]:
         "📋 Tabela de Dados e Ações",
         "✏️ Editar Registro Existente",
         "➕ Adicionar Novo Registro",
+        "🛠️ Manutenção e Otimização do App",
         "🚚 Custos Logísticos (Frota)",
     ]
 else:
@@ -503,7 +505,6 @@ elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["aute
     except Exception:
         lista_noturnos_cadastrados = []
 
-    # --- CONTROLE DE PERSISTÊNCIA DAS DATAS (Filtro de Período Brasil) ---
     ano_atual = date.today().year
     if "filtro_ganhos_desde" not in st.session_state:
         st.session_state["filtro_ganhos_desde"] = date(ano_atual, 1, 1)
@@ -514,15 +515,15 @@ elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["aute
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         data_desde = st.date_input(
-            "Data Início (De):", 
+            "Data Início (De):",
             value=st.session_state["filtro_ganhos_desde"],
-            key="input_desde_ganhos"
+            key="input_desde_ganhos",
         )
     with col_d2:
         data_hastá = st.date_input(
-            "Data Fim (Até):", 
+            "Data Fim (Até):",
             value=st.session_state["filtro_ganhos_hastá"],
-            key="input_hasta_ganhos"
+            key="input_hasta_ganhos",
         )
 
     st.session_state["filtro_ganhos_desde"] = data_desde
@@ -534,15 +535,18 @@ elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["aute
         df_faturamento["Data_Visita_DT"] = pd.to_datetime(
             df_faturamento["Data Visita"], errors="coerce"
         ).dt.date
-        
         df_faturamento = df_faturamento[
-            (df_faturamento["Data_Visita_DT"].isna()) | 
-            ((df_faturamento["Data_Visita_DT"] >= data_desde) & (df_faturamento["Data_Visita_DT"] <= data_hastá))
+            (df_faturamento["Data_Visita_DT"].isna())
+            | (
+                (df_faturamento["Data_Visita_DT"] >= data_desde)
+                & (df_faturamento["Data_Visita_DT"] <= data_hastá)
+            )
         ]
 
     df_faturamento["Eh_Noturno"] = df_faturamento[
         "Identificador_Unico"
     ].isin(lista_noturnos_cadastrados)
+
 
     def calcular_ganho_linha(row):
         status = row["Status"]
@@ -559,6 +563,7 @@ elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["aute
                 return 25.0
             else:
                 return 0.0
+
 
     df_faturamento["Ganho_R$"] = df_faturamento.apply(
         calcular_ganho_linha, axis=1
@@ -611,10 +616,6 @@ elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["aute
 
     st.markdown("---")
     st.markdown("### ⚙️ Configuração de Pontos Noturnos")
-    st.markdown(
-        "Selecione os estabelecimentos que pertencem à categoria de **Turno Noturno** para aplicar automaticamente as regras diferenciadas de pagamento:"
-    )
-
     with st.form("form_config_noturno"):
         pontos_selecao_noturna = st.multiselect(
             "Estabelecimentos Noturnos:",
@@ -669,6 +670,7 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
         location=[-27.5954, -48.5480], zoom_start=14, control_scale=True
     )
 
+
     def obter_cor_marcador(status):
         status_limpo = str(status).strip().capitalize()
         if status_limpo == "Auditado":
@@ -682,11 +684,10 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
         else:
             return "gray"
 
+
     for _, row in df.iterrows():
         try:
             lat, lon = None, None
-            
-            # Tenta ler lat/lon direto do DataFrame caso já existam preenchidas
             lat_val = str(row.get("Latitude", "")).strip()
             lon_val = str(row.get("Longitude", "")).strip()
 
@@ -702,14 +703,12 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                 except ValueError:
                     pass
 
-            endereco_completo = str(
-                row.get("Endereço Completo", "")
-            ).strip()
+            endereco_completo = str(row.get("Endereço Completo", "")).strip()
 
             if lat is None or lon is None:
                 if not endereco_completo or endereco_completo in ["nan", "None"]:
                     rua = str(row.get("Rua", "")).strip()
-                    numero = str(row.get("Número", "")).strip()
+                    numero = str(row.get("Numero", "")).strip()
                     bairro = str(row.get("Bairro", "")).strip()
                     cidade = str(row.get("Cidade", "Florianópolis")).strip()
                     cep = str(row.get("CEP", "")).strip()
@@ -791,9 +790,7 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
 
                 if novo_status_mapa != "Pendente":
                     data_atual = date.today().strftime("%Y-%m-%d")
-                    sheet.update_cell(
-                        linha_alvo, idx_data_col, data_atual
-                    )
+                    sheet.update_cell(linha_alvo, idx_data_col, data_atual)
 
                 st.cache_data.clear()
                 st.success(
@@ -832,7 +829,9 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
             ]
         )
         destinatarios_sel = st.multiselect(
-            "Filtrar por Destinatário(s):", options=todos_destinatarios, default=[]
+            "Filtrar por Destinatário(s):",
+            options=todos_destinatarios,
+            default=[],
         )
 
     with col_status:
@@ -904,10 +903,7 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
 
     lista_identificadores = df["Identificador_Unico"].tolist()
     idx_default = 0
-    if (
-        st.session_state["destinatario_para_editar"]
-        in lista_identificadores
-    ):
+    if st.session_state["destinatario_para_editar"] in lista_identificadores:
         idx_default = lista_identificadores.index(
             st.session_state["destinatario_para_editar"]
         )
@@ -983,7 +979,7 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
                         n_lng,
                         n_data_visita,
                     ]
-                    
+
                     sheet.update(
                         range_name=f"A{linha_real}:L{linha_real}",
                         values=[novos_valores],
@@ -1044,7 +1040,100 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
                     st.error(f"❌ Erro ao cadastrar na planilha: {err}")
 
 
-# --- ABA 6: CUSTOS LOGÍSTICOS E FROTA ---
+# --- ABA 6: MANUTENÇÃO E OTIMIZAÇÃO DO APP ---
+elif opcao == "🛠️ Manutenção e Otimização do App" and st.session_state["autenticado"]:
+    st.subheader("🛠️ Painel de Manutenção e Reparo de Dados")
+    st.markdown("---")
+    st.markdown(
+        "Utilize as ferramentas abaixo para escanear a base de dados em busca de inconsistências geográficas (pontos sem coordenadas ou alocados fora da região de Florianópolis) e realizar o reparo em lote."
+    )
+
+    LAT_MIN, LAT_MAX = -27.85, -27.30
+    LON_MIN, LON_MAX = -48.65, -48.35
+
+
+    def coordenada_valida(lat, lon):
+        try:
+            lat_f = float(lat)
+            lon_f = float(lon)
+            return LAT_MIN <= lat_f <= LAT_MAX and LON_MIN <= lon_f <= LON_MAX
+        except (ValueError, TypeError):
+            return False
+
+
+    # Identificar quantos pontos estão inconsistentes na base atual
+    pontos_inconsistentes = 0
+    for _, r in df.iterrows():
+        if not coordenada_valida(r.get("Latitude", ""), r.get("Longitude", "")):
+            pontos_inconsistentes += 1
+
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+        st.metric(label="📍 Total de Pontos na Base", value=len(df))
+    with col_m2:
+        st.metric(
+            label="⚠️ Pontos sem Coordenadas / Inválidos",
+            value=pontos_inconsistentes,
+            delta_color="inverse",
+        )
+
+    st.markdown("### 🔧 Ferramenta de Varredura e Correção Geográfica")
+    st.markdown(
+        "Ao clicar no botão abaixo, o sistema irá varrer a planilha, identificar os estabelecimentos com coordenadas ausentes ou incorretas (fora de Florianópolis), recalcular o posicionamento correto via geocodificador e atualizar o Google Sheets automaticamente."
+    )
+
+    if st.button("🚀 Executar Reparo de Coordenadas em Lote", type="primary"):
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        total_linhas = len(df)
+        reparados = 0
+
+        for idx, row in df.iterrows():
+            linha_real = int(row["_linha_sheets"])
+            lat_val = str(row.get("Latitude", "")).strip()
+            lon_val = str(row.get("Longitude", "")).strip()
+
+            if not coordenada_valida(lat_val, lon_val):
+                dest_nome = row.get("Destinatário", "Local")
+                status_text.text(
+                    f"Reparando ({idx+1}/{total_linhas}): {dest_nome}..."
+                )
+
+                rua = str(row.get("Rua", "")).strip()
+                numero = str(row.get("Numero", "")).strip()
+                bairro = str(row.get("Bairro", "")).strip()
+                cidade = str(row.get("Cidade", "Florianópolis")).strip()
+                cep = str(row.get("CEP", "")).strip()
+
+                end_completo = (
+                    f"{rua}, {numero} - {bairro}, {cidade} - SC, {cep}, Brasil"
+                )
+                l_lat, l_lon = geolocalizar_endereco(end_completo)
+
+                if l_lat and l_lon:
+                    try:
+                        idx_lat_col = cabecalho.index("Latitude") + 1
+                        idx_lon_col = cabecalho.index("Longitude") + 1
+
+                        sheet.update_cell(linha_real, idx_lat_col, str(l_lat))
+                        sheet.update_cell(linha_real, idx_lon_col, str(l_lon))
+                        reparados += 1
+                    except Exception:
+                        pass
+                time.sleep(1)  # Intervalo de segurança para a API
+
+            progress_bar.progress((idx + 1) / total_linhas)
+
+        status_text.empty()
+        progress_bar.empty()
+        st.cache_data.clear()
+        st.success(
+            f"✅ Processo concluído com sucesso! **{reparados}** pontos foram corrigidos e atualizados no Google Sheets."
+        )
+        st.rerun()
+
+
+# --- ABA 7: CUSTOS LOGÍSTICOS E FROTA ---
 elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticado"]:
     st.subheader(
         "🚚 Controle de Custos Logísticos (Abastecimentos e Manutenções)"
@@ -1251,9 +1340,7 @@ elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticad
                     "Odometro_Clean"
                 ].diff()
                 df_abast_calc["Km_Por_Litro"] = df_abast_calc.apply(
-                    lambda r: round(
-                        r["Delta_Km"] / r["Litros_Clean"], 2
-                    )
+                    lambda r: round(r["Delta_Km"] / r["Litros_Clean"], 2)
                     if r["Litros_Clean"] > 0 and r["Delta_Km"] > 0
                     else 0,
                     axis=1,

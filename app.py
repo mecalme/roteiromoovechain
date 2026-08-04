@@ -810,197 +810,226 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                 st.error(f"❌ Erro ao atualizar status: {err}")
 
 
-# --- ABA 3: TABELA DE DADOS E AÇÕES ---
+--- ABA 3: TABELA DE DADOS E AÇÕES ---
 elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:
-    st.subheader("📋 Tabela de Destinatários e Rotas")
+  st.subheader("📋 Tabela de Dados e Ações")
+  st.markdown("---")
 
-    col_bairro, col_dest, col_status = st.columns([1, 1.2, 0.8])
-    with col_bairro:
-        todos_bairros = sorted(
-            [str(b) for b in df["Bairro"].unique() if str(b).strip() != ""]
-        )
-        bairros_sel = st.multiselect(
-            "Filtrar por Bairro(s):", options=todos_bairros, default=[]
-        )
+  # Filtros com chaves persistentes no session_state
+  col_bairro, col_dest, col_status = st.columns(3)
 
-    df_filtrado = df.copy()
-    if bairros_sel:
-        df_filtrado = df_filtrado[
-            df_filtrado["Bairro"].astype(str).isin(bairros_sel)
+  with col_bairro:
+    todos_bairros = sorted(
+        [
+            str(b)
+            for b in df["Bairro"].unique()
+            if str(b).strip() != "" and str(b) != "nan"
         ]
-
-    with col_dest:
-        todos_destinatarios = sorted(
-            [
-                str(d)
-                for d in df_filtrado["Destinatário"].unique()
-                if str(d).strip() != ""
-            ]
-        )
-        destinatarios_sel = st.multiselect(
-            "Filtrar por Destinatário(s):",
-            options=todos_destinatarios,
-            default=[],
-        )
-
-    with col_status:
-        status_sel = st.selectbox(
-            "Filtrar por Status:", ["Todos"] + LISTA_STATUS
-        )
-
-    if destinatarios_sel:
-        df_filtrado = df_filtrado[
-            df_filtrado["Destinatário"].astype(str).isin(destinatarios_sel)
-        ]
-    if status_sel != "Todos":
-        df_filtrado = df_filtrado[
-            df_filtrado["Status"].astype(str) == status_sel
-        ]
-
-    st.write(f"Exibindo **{len(df_filtrado)}** de **{len(df)}** registros.")
-    df_exibicao = df_filtrado.drop(
-        columns=["_linha_sheets", "Identificador_Unico"], errors="ignore"
+    )
+    bairros_sel = st.multiselect(
+        "Filtrar por Bairro(s):",
+        options=todos_bairros,
+        default=[],
+        key="filtro_tabela_bairro",
     )
 
-    event = st.dataframe(
-        df_exibicao,
-        use_container_width=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        key="tabela_destinatarios",
+  df_filtrado = df.copy()
+  if bairros_sel:
+    df_filtrado = df_filtrado[
+        df_filtrado["Bairro"].astype(str).isin(bairros_sel)
+    ]
+
+  with col_dest:
+    todos_destinatarios = sorted(
+        [
+            str(d)
+            for d in df_filtrado["Destinatário"].unique()
+            if str(d).strip() != ""
+        ]
     )
-    rows_selecionadas = event.selection.get("rows", [])
+    destinatarios_sel = st.multiselect(
+        "Filtrar por Destinatário(s):",
+        options=todos_destinatarios,
+        default=[],
+        key="filtro_tabela_destinatario",
+    )
 
-    st.markdown("---")
-    col_info, col_btn = st.columns([3, 1])
-    if len(rows_selecionadas) > 0:
-        idx_linha = rows_selecionadas[0]
-        registro_selecionado = df_filtrado.iloc[idx_linha]
-        id_unico = registro_selecionado["Identificador_Unico"]
+  with col_status:
+    status_sel = st.selectbox(
+        "Filtrar por Status:",
+        ["Todos"] + LISTA_STATUS,
+        key="filtro_tabela_status",
+    )
 
-        with col_info:
-            st.success(
-                f"📌 **Selecionado:** {registro_selecionado['Destinatário']} (Linha {registro_selecionado['_linha_sheets']} no Sheets)"
-            )
-        with col_btn:
-            if st.button(
-                "✏️ Editar Registro Selecionado",
-                type="primary",
-                use_container_width=True,
-            ):
-                st.session_state["destinatario_para_editar"] = id_unico
-                st.session_state["mensagem_sucesso_edicao"] = None
-                st.session_state["menu_selecionado"] = (
-                    "✏️ Editar Registro Existente"
-                )
-                st.rerun()
+  if destinatarios_sel:
+    df_filtrado = df_filtrado[
+        df_filtrado["Destinatário"].astype(str).isin(destinatarios_sel)
+    ]
+  if status_sel != "Todos":
+    df_filtrado = df_filtrado[df_filtrado["Status"].astype(str) == status_sel]
 
+  st.write(f"Exibindo {len(df_filtrado)} de {len(df)} registros.")
 
-# --- ABA 4: EDITAR REGISTRO EXISTENTE ---
+  df_exibicao = df_filtrado.drop(
+      columns=["_linha_sheets", "Identificador_Unico"], errors="ignore"
+  )
+  event = st.dataframe(
+      df_exibicao,
+      use_container_width=True,
+      on_select="rerun",
+      selection_mode="single-row",
+      key="tabela_destinatarios",
+  )
+
+  rows_selecionadas = event.selection.get("rows", [])
+  st.markdown("---")
+  col_info, col_btn = st.columns([3, 1])
+
+  if len(rows_selecionadas) > 0:
+    idx_linha = rows_selecionadas[0]
+    registro_selecionado = df_filtrado.iloc[idx_linha]
+    with col_info:
+      st.info(
+          f"📍 Selecionado: **{registro_selecionado['Destinatário']}** ("
+          f"{registro_selecionado.get('Bairro', '')})"
+      )
+    with col_btn:
+      if st.button("✏️ Editar este Registro", type="primary"):
+        st.session_state["destinatario_para_editar"] = registro_selecionado[
+            "Identificador_Unico"
+        ]
+        st.session_state["menu_selecionado"] = "✏️ Editar Registro Existente"
+        st.rerun()
+
+--- ABA 4: EDITAR REGISTRO EXISTENTE ---
 elif opcao == "✏️ Editar Registro Existente" and st.session_state["autenticado"]:
-    st.subheader("✏️ Editar Registro na Planilha")
+  st.subheader("✏️ Editar Registro na Planilha")
 
-    if st.session_state.get("mensagem_sucesso_edicao"):
-        st.success(st.session_state["mensagem_sucesso_edicao"])
-        if st.button("📋 Voltar para a Tabela de Dados", type="secondary"):
-            st.session_state["mensagem_sucesso_edicao"] = None
-            st.session_state["menu_selecionado"] = (
-                "📋 Tabela de Dados e Ações"
-            )
-            st.rerun()
-        st.markdown("---")
+  if st.session_state.get("mensagem_sucesso_edicao"):
+    st.success(st.session_state["mensagem_sucesso_edicao"])
+    if st.button("📋 Voltar para a Tabela de Dados", type="secondary"):
+      st.session_state["mensagem_sucesso_edicao"] = None
+      st.session_state["menu_selecionado"] = "📋 Tabela de Dados e Ações"
+      st.rerun()
+    st.markdown("---")
 
-    lista_identificadores = df["Identificador_Unico"].tolist()
-    idx_default = 0
-    if st.session_state["destinatario_para_editar"] in lista_identificadores:
-        idx_default = lista_identificadores.index(
-            st.session_state["destinatario_para_editar"]
-        )
-
-    dest_sel = st.selectbox(
-        "Selecione o Destinatário para editar:",
-        options=lista_identificadores,
-        index=idx_default,
+  lista_identificadores = df["Identificador_Unico"].tolist()
+  idx_default = 0
+  if st.session_state["destinatario_para_editar"] in lista_identificadores:
+    idx_default = lista_identificadores.index(
+        st.session_state["destinatario_para_editar"]
     )
 
-    if dest_sel:
-        st.session_state["destinatario_para_editar"] = dest_sel
-        dados = df[df["Identificador_Unico"] == dest_sel].iloc[0]
-        linha_real = int(dados["_linha_sheets"])
+  dest_sel = st.selectbox(
+      "Selecione o estabelecimento para editar:",
+      options=lista_identificadores,
+      index=idx_default,
+  )
 
-        with st.form("f_edit"):
-            n_dest = st.text_input(
-                "Destinatário", value=str(dados["Destinatário"])
-            )
-            n_rua = st.text_input("Rua", value=str(dados.get("Rua", "")))
-            n_num = st.text_input("Número", value=str(dados.get("Numero", "")))
-            n_bairro = st.text_input(
-                "Bairro", value=str(dados.get("Bairro", ""))
-            )
-            n_cid = st.text_input(
-                "Cidade", value=str(dados.get("Cidade", "Florianópolis"))
-            )
-            n_est = st.text_input(
-                "Estado", value=str(dados.get("Estado", "SC"))
-            )
-            n_cep = st.text_input("CEP", value=str(dados.get("CEP", "")))
+  if dest_sel:
+    st.session_state["destinatario_para_editar"] = dest_sel
+    dados = df[df["Identificador_Unico"] == dest_sel].iloc[0]
+    linha_real = int(dados["_linha_sheets"])
 
-            st_atual = str(dados["Status"]).strip().capitalize()
-            idx_st = (
-                LISTA_STATUS.index(st_atual)
-                if st_atual in LISTA_STATUS
-                else 0
+    # Tratamento da Data do Registro (Predeterminada com hoje ou a existente)
+    data_existente_str = str(dados.get("Data Visita", "")).strip()
+    if data_existente_str and data_existente_str not in ["nan", "None", ""]:
+      try:
+        data_padrao = datetime.strptime(data_existente_str, "%Y-%m-%d").date()
+      except ValueError:
+        data_padrao = date.today()
+    else:
+      data_padrao = date.today()
+
+    with st.form("f_edit"):
+      n_data = st.date_input(
+          "Data da Visita / Registro",
+          value=data_padrao,
+          help=(
+              "Por padrão exibe a data de hoje, mas pode ser alterada para"
+              " datas anteriores se necessário."
+          ),
+      )
+      n_dest = st.text_input("Destinatário", value=str(dados["Destinatário"]))
+      n_rua = st.text_input("Rua", value=str(dados.get("Rua", "")))
+      n_num = st.text_input("Número", value=str(dados.get("Numero", "")))
+      n_bairro = st.text_input("Bairro", value=str(dados.get("Bairro", "")))
+      n_cid = st.text_input(
+          "Cidade", value=str(dados.get("Cidade", "Florianópolis"))
+      )
+      n_est = st.text_input("Estado", value=str(dados.get("Estado", "SC")))
+      n_cep = st.text_input("CEP", value=str(dados.get("CEP", "")))
+
+      st_atual = str(dados["Status"]).strip().capitalize()
+      idx_st = (
+          LISTA_STATUS.index(st_atual) if st_atual in LISTA_STATUS else 0
+      )
+      n_status = st.selectbox("Status", LISTA_STATUS, index=idx_st)
+
+      if st.form_submit_button("💾 Salvar Alterações", type="primary"):
+        try:
+          # Reconstrói o endereço completo atualizado
+          n_end_comp = f"{n_rua}, {n_num} - {n_bairro}, {n_cid} - {n_est}, CEP {n_cep}, Brasil"
+
+          # Recalcula geolocalização se o endereço foi modificado
+          lat_antiga = str(dados.get("Latitude", ""))
+          lon_antiga = str(dados.get("Longitude", ""))
+          rua_antiga = str(dados.get("Rua", ""))
+
+          if n_rua != rua_antiga or not lat_antiga or not lon_antiga:
+            nova_lat, nova_lon = geolocalizar_endereco(n_end_comp)
+          else:
+            nova_lat, nova_lon = lat_antiga, lon_antiga
+
+          # Encontra os índices das colunas no Google Sheets para atualizar corretamente
+          cabecalho_atual = [str(c).strip() for c in sheet.row_values(1)]
+
+          def get_col_idx(nome):
+            return (
+                cabecalho_atual.index(nome) + 1
+                if nome in cabecalho_atual
+                else None
             )
-            n_st = st.selectbox("Status", LISTA_STATUS, index=idx_st)
 
-            n_lat = st.text_input(
-                "Latitude", value=str(dados.get("Latitude", ""))
+          # Atualiza células específicas na linha correspondente do Sheets
+          if get_col_idx("Destinatário"):
+            sheet.update_cell(
+                linha_real, get_col_idx("Destinatário"), n_dest
             )
-            n_lng = st.text_input(
-                "Longitude", value=str(dados.get("Longitude", ""))
+          if get_col_idx("Rua"):
+            sheet.update_cell(linha_real, get_col_idx("Rua"), n_rua)
+          if get_col_idx("Numero"):
+            sheet.update_cell(linha_real, get_col_idx("Numero"), n_num)
+          if get_col_idx("Bairro"):
+            sheet.update_cell(linha_real, get_col_idx("Bairro"), n_bairro)
+          if get_col_idx("Cidade"):
+            sheet.update_cell(linha_real, get_col_idx("Cidade"), n_cid)
+          if get_col_idx("Estado"):
+            sheet.update_cell(linha_real, get_col_idx("Estado"), n_est)
+          if get_col_idx("CEP"):
+            sheet.update_cell(linha_real, get_col_idx("CEP"), n_cep)
+          if get_col_idx("Status"):
+            sheet.update_cell(linha_real, get_col_idx("Status"), n_status)
+          if get_col_idx("Data Visita"):
+            sheet.update_cell(
+                linha_real,
+                get_col_idx("Data Visita"),
+                n_data.strftime("%Y-%m-%d"),
             )
-            n_data_visita = st.text_input(
-                "Data Visita", value=str(dados.get("Data Visita", ""))
-            )
+          if nova_lat and nova_lon:
+            if get_col_idx("Latitude"):
+              sheet.update_cell(linha_real, get_col_idx("Latitude"), nova_lat)
+            if get_col_idx("Longitude"):
+              sheet.update_cell(linha_real, get_col_idx("Longitude"), nova_lon)
 
-            if st.form_submit_button(
-                "💾 Salvar Alterações na Planilha", type="primary"
-            ):
-                try:
-                    n_end_comp = f"{n_rua}, {n_num} - {n_bairro}, {n_cid} - {n_est}, CEP {n_cep}, Brasil"
-                    if not n_lat or not n_lng:
-                        n_lat, n_lng = geolocalizar_endereco(n_end_comp)
-
-                    if n_st != "Pendente" and not n_data_visita.strip():
-                        n_data_visita = date.today().strftime("%Y-%m-%d")
-
-                    novos_valores = [
-                        n_dest,
-                        n_rua,
-                        n_num,
-                        n_bairro,
-                        n_cid,
-                        n_est,
-                        n_cep,
-                        n_end_comp,
-                        n_st,
-                        n_lat,
-                        n_lng,
-                        n_data_visita,
-                    ]
-
-                    sheet.update(
-                        range_name=f"A{linha_real}:L{linha_real}",
-                        values=[novos_valores],
-                    )
-
-                    st.cache_data.clear()
-                    st.session_state[
-                        "mensagem_sucesso_edicao"
-                    ] = f"✅ Alteração salva com sucesso para **{n_dest}**!"
-                    st.rerun()
-                except Exception as err:
-                    st.error(f"❌ Erro ao salvar na planilha: {err}")
+          st.cache_data.clear()
+          st.session_state["mensagem_sucesso_edicao"] = (
+              f"✅ O registro de **{n_dest}** foi atualizado com sucesso na"
+              " planilha!"
+          )
+          st.rerun()
+        except Exception as e:
+          st.error(f"❌ Erro ao atualizar o registro no Google Sheets: {e}")
 
 
 # --- ABA 5: ADICIONAR NOVO REGISTRO ---

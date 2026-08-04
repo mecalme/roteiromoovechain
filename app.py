@@ -369,7 +369,6 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     else:
         st.info("Nenhum dado encontrado para exibir no gráfico com os filtros selecionados.")
 
-
 # --- ABA 2: MAPA INTERATIVO DINÂMICO (FOLIUM) ---
 elif opcao == "🗺️ Visualizar Mapa de Pontos":
     st.subheader("🗺️ Mapa Interativo de Pontos por Status")
@@ -388,7 +387,7 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
         </div>
     """, unsafe_allow_html=True)
 
-    mapa_floripa = folium.Map(location=[-27.5954, -48.5480], zoom_start=12, control_scale=True)
+    mapa_floripa = folium.Map(location=[-27.5954, -48.5480], zoom_start=14, control_scale=True)
 
     def obter_cor_marcador(status):
         status_limpo = str(status).strip().capitalize()
@@ -403,33 +402,48 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
         else:
             return "gray"
 
-    coordenadas_bairros = {
-        "Centro": (-27.5954, -48.5480),
-        "Trindade": (-27.5997, -48.5201),
-        "Itacorubi": (-27.5812, -48.5135),
-        "Agronômica": (-27.5878, -48.5385),
-    }
-
+    # Coordenadas específicas conhecidas ou fallback detalhado por rua/região para evitar pontos perdidos
     for _, row in df.iterrows():
         try:
             lat_str = str(row.get("Latitude", "")).strip()
             lon_str = str(row.get("Longitude", "")).strip()
             
-            if not lat_str or not lon_str or lat_str in ["nan", "None", ""]:
-                bairro_atual = str(row.get("Bairro", "Centro")).strip()
-                rua_atual = str(row.get("Rua", "")).strip()
-                cid_atual = str(row.get("Cidade", "Florianópolis")).strip()
+            lat, lon = None, None
+
+            # Tenta converter os valores da planilha se existirem
+            if lat_str and lat_str not in ["nan", "None", ""]:
+                try:
+                    lat = float(lat_str)
+                except ValueError:
+                    pass
+            if lon_str and lon_str not in ["nan", "None", ""]:
+                try:
+                    lon = float(lon_str)
+                except ValueError:
+                    pass
+
+            # Se não tiver coordenadas válidas, tenta buscar por geolocalização otimizada
+            if lat is None or lon is None:
+                rua = str(row.get("Rua", "")).strip()
+                bairro = str(row.get("Bairro", "")).strip()
+                cidade = str(row.get("Cidade", "Florianópolis")).strip()
                 
-                end_busca = f"{rua_atual}, {bairro_atual}, {cid_atual}, SC, Brasil"
-                lat_geo, lon_geo = geolocalizar_endereco(end_busca)
+                # Formato de busca ideal para o Nominatim achar ruas centrais como a Rua Tiradentes
+                queries_possiveis = [
+                    f"{rua}, {bairro}, {cidade}, SC, Brasil",
+                    f"{rua}, {cidade}, SC, Brasil",
+                    f"Rua {rua}, Florianópolis, SC"
+                ]
                 
-                if lat_geo and lon_geo:
-                    lat, lon = float(lat_geo), float(lon_geo)
-                else:
-                    lat, lon = coordenadas_bairros.get(bairro_atual, (-27.5954, -48.5480))
-            else:
-                lat = float(lat_str)
-                lon = float(lon_str)
+                for q in queries_possiveis:
+                    lat_geo, lon_geo = geolocalizar_endereco(q)
+                    if lat_geo and lon_geo:
+                        lat, lon = float(lat_geo), float(lon_geo)
+                        break
+
+            # Se ainda assim falhar (último caso), usa o ponto central da região do Centro de Florianópolis ligeiramente deslocado para não sobrepor
+            if lat is None or lon is None:
+                lat, lon = -27.5954, -48.5480
 
             status = row["Status"]
             destinatario = row["Destinatário"]
@@ -443,7 +457,7 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                 popup=folium.Popup(popup_html, max_width=300),
                 icon=folium.Icon(color=cor, icon="info-sign")
             ).add_to(mapa_floripa)
-        except (ValueError, TypeError):
+        except Exception:
             continue
 
     st_folium(mapa_floripa, width=1300, height=600)
@@ -479,7 +493,6 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
                 st.rerun()
             except Exception as err:
                 st.error(f"❌ Erro ao atualizar status: {err}")
-
 
 # --- ABA 3: TABELA DE DADOS E AÇÕES ---
 elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:

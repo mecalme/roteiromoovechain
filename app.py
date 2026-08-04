@@ -525,13 +525,11 @@ elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["aute
             key="input_hasta_ganhos"
         )
 
-    # Persiste na sessão para não resetar ao atualizar a página
     st.session_state["filtro_ganhos_desde"] = data_desde
     st.session_state["filtro_ganhos_hastá"] = data_hastá
 
     df_faturamento = df.copy()
 
-    # Filtra as linhas conforme o intervalo de datas da visita
     if "Data Visita" in df_faturamento.columns:
         df_faturamento["Data_Visita_DT"] = pd.to_datetime(
             df_faturamento["Data Visita"], errors="coerce"
@@ -687,23 +685,44 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
     for _, row in df.iterrows():
         try:
             lat, lon = None, None
+            
+            # Tenta ler lat/lon direto do DataFrame caso já existam preenchidas
+            lat_val = str(row.get("Latitude", "")).strip()
+            lon_val = str(row.get("Longitude", "")).strip()
+
+            if lat_val and lat_val not in ["nan", "None", ""]:
+                try:
+                    lat = float(lat_val)
+                except ValueError:
+                    pass
+
+            if lon_val and lon_val not in ["nan", "None", ""]:
+                try:
+                    lon = float(lon_val)
+                except ValueError:
+                    pass
+
             endereco_completo = str(
                 row.get("Endereço Completo", "")
             ).strip()
 
-            if not endereco_completo or endereco_completo in ["nan", "None"]:
-                rua = str(row.get("Rua", "")).strip()
-                numero = str(row.get("Número", "")).strip()
-                bairro = str(row.get("Bairro", "")).strip()
-                cidade = str(row.get("Cidade", "Florianópolis")).strip()
-                cep = str(row.get("CEP", "")).strip()
-                endereco_completo = (
-                    f"{rua}, {numero} - {bairro}, {cidade} - SC, {cep}"
-                )
+            if lat is None or lon is None:
+                if not endereco_completo or endereco_completo in ["nan", "None"]:
+                    rua = str(row.get("Rua", "")).strip()
+                    numero = str(row.get("Número", "")).strip()
+                    bairro = str(row.get("Bairro", "")).strip()
+                    cidade = str(row.get("Cidade", "Florianópolis")).strip()
+                    cep = str(row.get("CEP", "")).strip()
+                    endereco_completo = (
+                        f"{rua}, {numero} - {bairro}, {cidade} - SC, {cep}"
+                    )
 
-            lat_geo, lon_geo = geolocalizar_endereco(endereco_completo)
-            if lat_geo and lon_geo:
-                lat, lon = float(lat_geo), float(lon_geo)
+                lat_geo, lon_geo = geolocalizar_endereco(endereco_completo)
+                if lat_geo and lon_geo:
+                    try:
+                        lat, lon = float(lat_geo), float(lon_geo)
+                    except ValueError:
+                        pass
 
             if lat is None or lon is None:
                 lat, lon = -27.5954, -48.5480

@@ -105,7 +105,7 @@ df, cabecalho = carregar_dados()
 
 LISTA_STATUS = ["Auditado", "Pendente", "Cancelado", "Justificado"]
 
-# --- MENU LATERAL (SIDEBAR) ---
+# --- MENU LATERAL (SIDEBAR) CORRIGIDO E FIXO ---
 st.sidebar.title("📍 Navegação")
 opcao = st.sidebar.selectbox(
     "Escolha a Seção:",
@@ -292,7 +292,6 @@ else:
         
         senha_digitada = st.text_input("Digite a senha de acesso restrito:", type="password")
         
-        # Senha padrão configurável
         SENHA_MESTRE = "admin123"
         
         if senha_digitada == SENHA_MESTRE:
@@ -301,8 +300,6 @@ else:
             # Regra de exceção específica para Locais Noturnos:
             # - Auditados: R$ 35,00
             # - Justificados: R$ 25,00
-            # - Demais (Pendente, Cancelado, etc.): R$ 0,00
-            
             total_auditados = 0
             total_justificados = 0
             

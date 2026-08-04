@@ -127,6 +127,7 @@ if st.session_state["autenticado"]:
     OPCOES_MENU = [
         "📊 Dashboard Auditorias MooveChain",
         "🗺️ Visualizar Mapa de Pontos",
+        "💰 Controle de Ganhos / Faturamento",
         "📋 Tabela de Dados e Ações",
         "✏️ Editar Registro Existente",
         "➕ Adicionar Novo Registro",
@@ -236,7 +237,7 @@ for op in OPCOES_MENU:
 opcao = st.session_state["menu_selecionado"]
 
 
-# --- ABA 1: DASHBOARD AUDITORIAS MOOVECHAIN ---
+# --- ABA 1: DASHBOARD AUDITORIAS MOOVECHAIN (PÚBLICO) ---
 if opcao == "📊 Dashboard Auditorias MooveChain":
     st.subheader("📊 Dashboard Auditorias MooveChain")
     st.markdown("---")
@@ -364,9 +365,12 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     else:
         st.info("Nenhum dado encontrado para exibir no gráfico com os filtros selecionados.")
 
-    # --- NOVO BLOCO: DASHBOARD FINANCEIRO / GANHOS ---
+
+# --- ABA EXCLUSIVA ADMIN: CONTROLE DE GANHOS E FATURAMENTO ---
+elif opcao == "💰 Controle de Ganhos / Faturamento" and st.session_state["autenticado"]:
+    st.subheader("💰 Painel Restrito de Ganhos e Faturamento")
     st.markdown("---")
-    st.markdown("### 4. 💰 Projeção e Controle de Ganhos (Faturamento)")
+    st.markdown("Gerencie abaixo os pontos noturnos e visualize o faturamento detalhado por ponto auditado e noturno.")
 
     try:
         aba_noturnos = obter_ou_criar_aba("Pontos_Noturnos", ["Identificador_Unico"])
@@ -375,7 +379,8 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     except Exception:
         lista_noturnos_cadastrados = []
 
-    df_dashboard["Eh_Noturno"] = df_dashboard["Identificador_Unico"].isin(lista_noturnos_cadastrados)
+    df_faturamento = df.copy()
+    df_faturamento["Eh_Noturno"] = df_faturamento["Identificador_Unico"].isin(lista_noturnos_cadastrados)
 
     def calcular_ganho_linha(row):
         status = row["Status"]
@@ -393,12 +398,12 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
             else:
                 return 0.0
 
-    df_dashboard["Ganho_R$"] = df_dashboard.apply(calcular_ganho_linha, axis=1)
+    df_faturamento["Ganho_R$"] = df_faturamento.apply(calcular_ganho_linha, axis=1)
 
-    total_ganho = df_dashboard["Ganho_R$"].sum()
-    total_auditados_normais = len(df_dashboard[(df_dashboard["Status"] == "Auditado") & (~df_dashboard["Eh_Noturno"])])
-    total_auditados_noturnos = len(df_dashboard[(df_dashboard["Status"] == "Auditado") & (df_dashboard["Eh_Noturno"])])
-    total_justificados_noturnos = len(df_dashboard[(df_dashboard["Status"] == "Justificado") & (df_dashboard["Eh_Noturno"])])
+    total_ganho = df_faturamento["Ganho_R$"].sum()
+    total_auditados_normais = len(df_faturamento[(df_faturamento["Status"] == "Auditado") & (~df_faturamento["Eh_Noturno"])])
+    total_auditados_noturnos = len(df_faturamento[(df_faturamento["Status"] == "Auditado") & (df_faturamento["Eh_Noturno"])])
+    total_justificados_noturnos = len(df_faturamento[(df_faturamento["Status"] == "Justificado") & (df_faturamento["Eh_Noturno"])])
 
     col_fin1, col_fin2, col_fin3, col_fin4 = st.columns(4)
     with col_fin1:
@@ -410,27 +415,29 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     with col_fin4:
         st.metric(label="🔵 Justificados Noturnos (R$ 25)", value=f"{total_justificados_noturnos}")
 
-    with st.expander("⚙️ Gerenciar Marcação de Pontos Noturnos"):
-        st.markdown("Selecione os estabelecimentos que pertencem à categoria de **Turno Noturno** para aplicar automaticamente as regras diferenciadas de pagamento:")
-        with st.form("form_config_noturno"):
-            pontos_selecao_noturna = st.multiselect(
-                "Estabelecimentos Noturnos:",
-                options=df["Identificador_Unico"].tolist(),
-                default=[p for p in lista_noturnos_cadastrados if p in df["Identificador_Unico"].tolist()]
-            )
-            btn_salvar_noturnos = st.form_submit_button("Salvar Configuração Noturna", type="primary")
-            
-            if btn_salvar_noturnos:
-                try:
-                    aba_noturnos.clear()
-                    aba_noturnos.append_row(["Identificador_Unico"])
-                    for p in pontos_selecao_noturna:
-                        aba_noturnos.append_row([p])
-                    st.cache_data.clear()
-                    st.success("✅ Configuração de pontos noturnos salva com sucesso!")
-                    st.rerun()
-                except Exception as e_noturno:
-                    st.error(f"Erro ao salvar pontos noturnos: {e_noturno}")
+    st.markdown("---")
+    st.markdown("### ⚙️ Configuração de Pontos Noturnos")
+    st.markdown("Selecione os estabelecimentos que pertencem à categoria de **Turno Noturno** para aplicar automaticamente as regras diferenciadas de pagamento:")
+    
+    with st.form("form_config_noturno"):
+        pontos_selecao_noturna = st.multiselect(
+            "Estabelecimentos Noturnos:",
+            options=df["Identificador_Unico"].tolist(),
+            default=[p for p in lista_noturnos_cadastrados if p in df["Identificador_Unico"].tolist()]
+        )
+        btn_salvar_noturnos = st.form_submit_button("Salvar Configuração Noturna", type="primary")
+        
+        if btn_salvar_noturnos:
+            try:
+                aba_noturnos.clear()
+                aba_noturnos.append_row(["Identificador_Unico"])
+                for p in pontos_selecao_noturna:
+                    aba_noturnos.append_row([p])
+                st.cache_data.clear()
+                st.success("✅ Configuração de pontos noturnos salva com sucesso!")
+                st.rerun()
+            except Exception as e_noturno:
+                st.error(f"Erro ao salvar pontos noturnos: {e_noturno}")
 
 
 # --- ABA 2: MAPA INTERATIVO DINÂMICO (FOLIUM) ---

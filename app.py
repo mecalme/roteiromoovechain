@@ -187,11 +187,16 @@ def conectar_sheets():
 def geolocalizar_endereco(endereco):
     try:
         geolocator = Nominatim(
-            user_agent="moovechain_app_fast_2026", timeout=10
+            user_agent="moovechain_floripa_geo_2026", timeout=12
         )
-        location = geolocator.geocode(endereco)
+        query_completa = f"{endereco}, Florianópolis, SC, Brasil"
+        location = geolocator.geocode(query_completa)
         if location:
-            return str(location.latitude), str(location.longitude)
+            lat_f = float(location.latitude)
+            lon_f = float(location.longitude)
+            # Validação estricta para garantir que está dentro de Florianópolis
+            if -27.85 <= lat_f <= -27.30 and -48.65 <= lon_f <= -48.35:
+                return str(lat_f), str(lon_f)
     except Exception:
         pass
     return "", ""
@@ -693,13 +698,17 @@ elif opcao == "🗺️ Visualizar Mapa de Pontos":
 
             if lat_val and lat_val not in ["nan", "None", ""]:
                 try:
-                    lat = float(lat_val)
+                    lat_f = float(lat_val)
+                    if -27.85 <= lat_f <= -27.30:
+                        lat = lat_f
                 except ValueError:
                     pass
 
             if lon_val and lon_val not in ["nan", "None", ""]:
                 try:
-                    lon = float(lon_val)
+                    lon_f = float(lon_val)
+                    if -48.65 <= lon_f <= -48.35:
+                        lon = lon_f
                 except ValueError:
                     pass
 
@@ -1061,7 +1070,6 @@ elif opcao == "🛠️ Manutenção e Otimização do App" and st.session_state[
             return False
 
 
-    # Identificar quantos pontos estão inconsistentes na base atual
     pontos_inconsistentes = 0
     for _, r in df.iterrows():
         if not coordenada_valida(r.get("Latitude", ""), r.get("Longitude", "")):
@@ -1087,6 +1095,7 @@ elif opcao == "🛠️ Manutenção e Otimização do App" and st.session_state[
         status_text = st.empty()
         total_linhas = len(df)
         reparados = 0
+        falhas = 0
 
         for idx, row in df.iterrows():
             linha_real = int(row["_linha_sheets"])
@@ -1119,18 +1128,25 @@ elif opcao == "🛠️ Manutenção e Otimização do App" and st.session_state[
                         sheet.update_cell(linha_real, idx_lon_col, str(l_lon))
                         reparados += 1
                     except Exception:
-                        pass
-                time.sleep(1)  # Intervalo de segurança para a API
+                        falhas += 1
+                else:
+                    falhas += 1
+                time.sleep(1)
 
             progress_bar.progress((idx + 1) / total_linhas)
 
         status_text.empty()
         progress_bar.empty()
         st.cache_data.clear()
+
+        # Feedback claro e explícito após a execução
         st.success(
-            f"✅ Processo concluído com sucesso! **{reparados}** pontos foram corrigidos e atualizados no Google Sheets."
+            f"✅ **Varredura Finalizada com Sucesso!**\n\n"
+            f"- 🟢 **Total de pontos reparados e salvos no Sheets:** {reparados}\n"
+            f"- ⚠️ **Pontos que não puderam ser geocodificados automaticamente:** {falhas}"
         )
-        st.rerun()
+        if reparados > 0:
+            st.balloons()
 
 
 # --- ABA 7: CUSTOS LOGÍSTICOS E FROTA ---

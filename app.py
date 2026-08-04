@@ -191,6 +191,7 @@ def conectar_sheets():
 
 @st.cache_data(ttl=86400)
 def geolocalizar_endereco(endereco, rua="", numero=""):
+    # 1. Verifica se é Rodovia Francisco Magno Vieira ou SC-405 e possui número mapeado fixo
     rua_upper = str(rua).upper()
     end_upper = str(endereco).upper()
     num_str = str(numero).strip()
@@ -199,6 +200,7 @@ def geolocalizar_endereco(endereco, rua="", numero=""):
         if num_str in COORDENADAS_FIXAS_SC405:
             return str(COORDENADAS_FIXAS_SC405[num_str]["lat"]), str(COORDENADAS_FIXAS_SC405[num_str]["lon"])
 
+    # 2. Caso contrário, executa a geolocalização normal via Nominatim
     try:
         geolocator = Nominatim(
             user_agent="moovechain_floripa_geo_2026", timeout=12
@@ -982,12 +984,15 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
                 try:
                     n_end_comp = f"{n_rua}, {n_num} - {n_bairro}, {n_cid} - {n_est}, {n_cep}"
                     
+                    # Se alterou rua/número para a SC-405, recalcula automaticamente se necessário
                     final_lat, final_lng = n_lat, n_lng
                     if not final_lat or not final_lng:
                         l_geo, l_lon_geo = geolocalizar_endereco(n_end_comp, rua=n_rua, numero=n_num)
                         if l_geo and l_lon_geo:
                             final_lat, final_lng = l_geo, l_lon_geo
 
+                    # Atualização correspondente no Sheets
+                    # (Mapeamento padrão das colunas)
                     sheet.update_cell(linha_real, cabecalho.index("Destinatário") + 1, n_dest)
                     if "Rua" in cabecalho: sheet.update_cell(linha_real, cabecalho.index("Rua") + 1, n_rua)
                     if "Numero" in cabecalho: sheet.update_cell(linha_real, cabecalho.index("Numero") + 1, n_num)
@@ -1001,165 +1006,3 @@ elif opcao == "✏️ Editar Registro Existente" and st.session_state["autentica
                     st.rerun()
                 except Exception as ex_edit:
                     st.error(f"Erro ao salvar edição: {ex_edit}")
-
-
-# --- ABA 5: ADICIONAR NOVO REGISTRO ---
-elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
-    st.subheader("➕ Adicionar Novo Ponto ao Roteiro")
-    st.markdown("---")
-
-    with st.form("form_adicionar_registro"):
-        col_n1, col_n2 = st.columns(2)
-        with col_n1:
-            novo_destinatario = st.text_input("Destinatário / Estabelecimento:")
-            nova_rua = st.text_input("Rua:")
-            novo_numero = st.text_input("Número:")
-            novo_bairro = st.text_input("Bairro:")
-        with col_n2:
-            nova_cidade = st.text_input("Cidade:", value="Florianópolis")
-            novo_estado = st.text_input("Estado:", value="SC")
-            novo_cep = st.text_input("CEP:")
-            novo_status = st.selectbox("Status Inicial:", LISTA_STATUS, index=0)
-
-        btn_submit_novo = st.form_submit_button("➕ Cadastrar Ponto", type="primary")
-
-        if btn_submit_novo:
-            if not novo_destinatario.strip() or not nova_rua.strip():
-                st.error("❌ Preencha pelo menos o Destinatário e a Rua.")
-            else:
-                try:
-                    end_completo = f"{nova_rua}, {novo_numero} - {novo_bairro}, {nova_cidade} - {nova_estado}, {novo_cep}"
-                    lat_g, lon_g = geolocalizar_endereco(end_completo, rua=nova_rua, numero=novo_numero)
-
-                    nova_linha = [
-                        novo_destinatario,
-                        nova_rua,
-                        novo_numero,
-                        novo_bairro,
-                        nova_cidade,
-                        nova_estado,
-                        novo_cep,
-                        lat_g,
-                        lon_g,
-                        novo_status,
-                        date.today().strftime("%Y-%m-%d") if novo_status != "Pendente" else ""
-                    ]
-
-                    while len(nova_linha) < len(cabecalho):
-                        nova_linha.append("")
-
-                    sheet.append_row(nova_linha[:len(cabecalho)])
-                    st.cache_data.clear()
-                    st.success(f"✅ Estabelecimento **{novo_destinatario}** adicionado com sucesso!")
-                    time.sleep(1)
-                    st.rerun()
-                except Exception as err_add:
-                    st.error(f"❌ Erro ao adicionar registro: {err_add}")
-
-
-# --- ABA 6: MANUTENÇÃO E OTIMIZAÇÃO DO APP ---
-elif opcao == "🛠️ Manutenção e Otimização do App" and st.session_state["autenticado"]:
-    st.subheader("🛠️ Manutenção, Limpeza de Cache e Otimização")
-    st.markdown("---")
-    
-    st.markdown("Utilize as ferramentas abaixo para revalidar coordenadas geográficas em lote ou limpar o cache do sistema caso perceba dados desatualizados na planilha.")
-
-    col_m1, col_m2 = st.columns(2)
-    
-    with col_m1:
-        st.markdown("### 🔄 Limpeza de Cache")
-        st.write("Limpa o cache local armazenado para forçar a leitura imediata de novas alterações feitas diretamente no Google Sheets.")
-        if st.button("🧹 Limpar Cache do Sistema", use_container_width=True):
-            st.cache_data.clear()
-            st.cache_resource.clear()
-            st.success("✅ Cache limpo com sucesso! Recarregue a página se necessário.")
-            time.sleep(1)
-            st.rerun()
-
-    with col_m2:
-        st.markdown("### 🗺️ Revalidação de Coordenadas")
-        st.write("Varre os registros da planilha e recalcula as coordenadas geográficas ausentes ou incorretas.")
-        if st.button("📍 Reotimizar Coordenadas", use_container_width=True):
-            with st.spinner("Recalculando coordenadas dos pontos..."):
-                atualizados = 0
-                for idx, row in df.iterrows():
-                    l_val = str(row.get("Latitude", "")).strip()
-                    r_val = str(row.get("Rua", "")).strip()
-                    n_val = str(row.get("Numero", "")).strip()
-                    b_val = str(row.get("Bairro", "")).strip()
-                    c_val = str(row.get("Cidade", "Florianópolis")).strip()
-                    cep_v = str(row.get("CEP", "")).strip()
-                    
-                    if not l_val or l_val in ["nan", "None", ""]:
-                        end_c = f"{r_val}, {n_val} - {b_val}, {c_val} - SC, {cep_v}"
-                        nl, nlo = geolocalizar_endereco(end_c, rua=r_val, numero=n_val)
-                        if nl and nlo:
-                            linha_sh = int(row["_linha_sheets"])
-                            idx_lat = cabecalho.index("Latitude") + 1 if "Latitude" in cabecalho else 8
-                            idx_lon = cabecalho.index("Longitude") + 1 if "Longitude" in cabecalho else 9
-                            sheet.update_cell(linha_sh, idx_lat, nl)
-                            sheet.update_cell(linha_sh, idx_lon, nlo)
-                            atualizados += 1
-                
-                st.cache_data.clear()
-                st.success(f"✅ Revalidação concluída! {atualizados} pontos tiveram suas coordenadas atualizadas.")
-
-
-# --- ABA 7: CUSTOS LOGÍSTICOS (FROTA) ---
-elif opcao == "🚚 Custos Logísticos (Frota)" and st.session_state["autenticado"]:
-    st.subheader("🚚 Controle de Custos Logísticos e Manutenção da Frota")
-    st.markdown("---")
-    st.markdown("Registre e acompanhe os gastos com abastecimento, troca de óleo, pneus e manutenções preventivas/corretivas.")
-
-    aba_custos = obter_ou_criar_aba("Custos_Frota", ["Data", "Tipo_Registro", "Veiculo", "Valor_R$", "Quilometragem", "Observacoes"])
-    
-    with st.form("form_novo_custo_frota"):
-        st.markdown("### ➕ Adicionar Novo Gasto / Manutenção")
-        col_c1, col_c2, col_c3 = st.columns(3)
-        
-        with col_c1:
-            data_gasto = st.date_input("Data do Registro:", value=date.today())
-            tipo_reg = st.selectbox("Tipo de Registro:", TIPOS_REGISTRO)
-        with col_c2:
-            veiculo_reg = st.text_input("Identificação do Veículo / Placa:", value="Frota Principal")
-            valor_reg = st.number_input("Valor (R$):", min_value=0.0, format="%.2f", step=10.0)
-        with col_c3:
-            km_reg = st.number_input("Quilometragem (KM atual):", min_value=0, step=100)
-            obs_reg = st.text_input("Observações:")
-
-        btn_salvar_custo = st.form_submit_button("💾 Salvar Registro na Frota", type="primary")
-
-        if btn_salvar_custo:
-            try:
-                linha_custo = [
-                    data_gasto.strftime("%Y-%m-%d"),
-                    tipo_reg,
-                    veiculo_reg,
-                    str(valor_reg),
-                    str(km_reg),
-                    obs_reg
-                ]
-                aba_custos.append_row(linha_custo)
-                st.success("✅ Registro logístico salvo com sucesso!")
-                time.sleep(1)
-                st.rerun()
-            except Exception as e_custo:
-                st.error(f"❌ Erro ao salvar custo logístico: {e_custo}")
-
-    st.markdown("---")
-    st.markdown("### 📊 Histórico de Custos Registrados")
-    
-    try:
-        dados_custos = aba_custos.get_all_values()
-        if len(dados_custos) > 1:
-            df_custos = pd.DataFrame(dados_custos[1:], columns=dados_custos[0])
-            df_custos["Valor_R$"] = pd.to_numeric(df_custos["Valor_R$"], errors="coerce").fillna(0.0)
-            
-            total_gasto_frota = df_custos["Valor_R$"].sum()
-            st.metric(label="💰 Gasto Total Acumulado com Frota", value=f"R$ {total_gasto_frota:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            
-            st.dataframe(df_custos, use_container_width=True)
-        else:
-            st.info("Nenhum registro de custo logístico cadastrado até o momento.")
-    except Exception as e_ler_custos:
-        st.warning(f"Não foi possível carregar os custos logísticos: {e_ler_custos}")

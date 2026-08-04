@@ -233,6 +233,44 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     st.subheader("📊 Dashboard Auditorias MooveChain")
     st.markdown("---")
 
+    # --- FILTROS DINÂMICOS (ESTADO, CIDADE, BAIRRO E STATUS) ---
+    st.markdown("### 🔍 Filtros Dinâmicos")
+    
+    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+    
+    with col_f1:
+        estados_disponiveis = sorted([str(e) for e in df.get("Estado", pd.Series(["SC"])).unique() if str(e).strip() != ""])
+        estados_sel = st.multiselect("Filtrar por Estado(s):", options=estados_disponiveis, default=[])
+    
+    df_temp_est = df[df["Estado"].astype(str).isin(estados_sel)] if estados_sel else df
+
+    with col_f2:
+        cidades_disponiveis = sorted([str(c) for c in df_temp_est.get("Cidade", pd.Series(["Florianópolis"])).unique() if str(c).strip() != ""])
+        cidades_sel = st.multiselect("Filtrar por Cidade(s):", options=cidades_disponiveis, default=[])
+
+    df_temp_cid = df_temp_est[df_temp_est["Cidade"].astype(str).isin(cidades_sel)] if cidades_sel else df_temp_est
+
+    with col_f3:
+        bairros_disponiveis = sorted([str(b) for b in df_temp_cid.get("Bairro", pd.Series()).unique() if str(b).strip() != ""])
+        bairros_sel = st.multiselect("Filtrar por Bairro(s):", options=bairros_disponiveis, default=[])
+
+    with col_f4:
+        opcoes_status_filtro = ["Todos"] + LISTA_STATUS
+        status_sel = st.multiselect("Filtrar por Status:", options=opcoes_status_filtro, default=["Todos"])
+
+    # --- APLICAÇÃO DOS FILTROS NO DATAFRAME DO DASHBOARD ---
+    df_dashboard = df.copy()
+    if estados_sel:
+        df_dashboard = df_dashboard[df_dashboard["Estado"].astype(str).isin(estados_sel)]
+    if cidades_sel:
+        df_dashboard = df_dashboard[df_dashboard["Cidade"].astype(str).isin(cidades_sel)]
+    if bairros_sel:
+        df_dashboard = df_dashboard[df_dashboard["Bairro"].astype(str).isin(bairros_sel)]
+    if status_sel and "Todos" not in status_sel:
+        df_dashboard = df_dashboard[df_dashboard["Status"].astype(str).isin(status_sel)]
+
+    st.markdown("---")
+
     status_padrao = ["Auditado", "Cancelado", "Justificado"]
     status_medicao = st.multiselect(
         "⚙️ Status considerados como Concluídos:",
@@ -241,16 +279,16 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         help="Escolha quais status representam uma visita/medição finalizada."
     )
 
-    total_geral = len(df)
-    df_concluidos = df[df["Status"].isin(status_medicao)]
+    total_geral = len(df_dashboard)
+    df_concluidos = df_dashboard[df_dashboard["Status"].isin(status_medicao)]
     concluidos = len(df_concluidos)
     restantes = total_geral - concluidos
     pct_conclusao = (concluidos / total_geral * 100) if total_geral > 0 else 0.0
 
     # 1. PROGRESSO GLOBAL NO PRIMEIRO LUGAR
     st.markdown("### 1. 🎯 Progresso Global de Auditorias")
-    st.progress(pct_conclusao / 100)
-    st.caption(f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado")
+    st.progress(pct_conclusao / 100 if total_geral > 0 else 0.0)
+    st.caption(f"🎯 Conclusão Global: **{pct_conclusao:.1f}%** do total auditado (Total filtrado: {total_geral} pontos)")
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -268,10 +306,10 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     st.markdown("---")
 
     # Contagens individuais para cada status
-    qtd_auditado = len(df[df["Status"] == "Auditado"])
-    qtd_pendente = len(df[df["Status"] == "Pendente"])
-    qtd_cancelado = len(df[df["Status"] == "Cancelado"])
-    qtd_justificado = len(df[df["Status"] == "Justificado"])
+    qtd_auditado = len(df_dashboard[df_dashboard["Status"] == "Auditado"])
+    qtd_pendente = len(df_dashboard[df_dashboard["Status"] == "Pendente"])
+    qtd_cancelado = len(df_dashboard[df_dashboard["Status"] == "Cancelado"])
+    qtd_justificado = len(df_dashboard[df_dashboard["Status"] == "Justificado"])
 
     st.markdown("### 2. 📌 Detalhamento por Status Atual")
     col_s1, col_s2, col_s3, col_s4 = st.columns(4)
@@ -287,7 +325,7 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
     st.markdown("---")
     st.markdown("### 3. 📊 Progresso por Bairro")
 
-    df_barras = df.copy()
+    df_barras = df_dashboard.copy()
     df_barras["Situacao"] = df_barras["Status"].apply(
         lambda s: "Concluído" if s in status_medicao else "Pendente"
     )
@@ -321,7 +359,7 @@ if opcao == "📊 Dashboard Auditorias MooveChain":
         fig_stacked.update_layout(xaxis_tickangle=-45, height=450, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_stacked, use_container_width=True)
     else:
-        st.info("Nenhum dado encontrado para exibir no gráfico.")
+        st.info("Nenhum dado encontrado para exibir no gráfico com os filtros selecionados.")
 
 
 # --- ABA 2: MAPA INTERATIVO DINÂMICO (FOLIUM) ---

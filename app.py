@@ -230,11 +230,25 @@ elif opcao == "🗺️ Mapa de Pontos":
             st.warning("Nenhum ponto com coordenadas válidas para exibição.")
 
 # --- ABA 3: CUSTOS LOGÍSTICOS ---
-elif opcao == "🚚 Custos Logísticos (Frota)":
-    st.title("🚚 Controle de Custos Logísticos")
-    st.info("Acesse a aba de controle da frota.")
-    if not df_dados.empty:
-        st.dataframe(df_dados.head(20), use_container_width=True)
+elif opcao == "🚛 Custo Logístico de Frota":  # (ou o nome exato que usas no teu menu)
+    if st.session_state.get("admin_autenticado", False):
+        st.subheader("🚛 Custo Logístico de Frota")
+        st.markdown("---")
+        try:
+            gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
+            sh = gc.open("Roteiro MooveChain Florianóplis 2026")
+            aba_custos = sh.worksheet("Controle_Custos")
+            dados_custos = aba_custos.get_all_records()
+            
+            if dados_custos:
+                df_custos = pd.DataFrame(dados_custos)
+                st.dataframe(df_custos, use_container_width=True)
+            else:
+                st.warning("A aba 'Controle_Custos' está vazia.")
+        except Exception as e:
+            st.error(f"Erro ao carregar a aba: {e}")
+    else:
+        st.warning("🔒 Esta seção é restrita aos administradores do sistema.")
 
 # --- ABA 4: ADICIONAR NOVO REGISTRO (ADMIN) ---
 elif opcao == "➕ Adicionar Novo Registro":

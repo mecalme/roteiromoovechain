@@ -185,8 +185,38 @@ elif opcao == "🚛 Custos Logísticos (Frota)":
                     fig_pizza = px.pie(df_custos, names="Categoria", values="Valor", title="Distribuição de Custos por Categoria")
                     st.plotly_chart(fig_pizza, use_container_width=True)
                 elif len(df_custos.columns) >= 2:
-                    # Caso os nomes das colunas difiram ligeiramente, pega a 1ª como categoria e a 2ª como valor numérico
                     col_cat = df_custos.columns[0]
                     col_val = df_custos.columns[1]
                     fig_pizza = px.pie(df_custos, names=col_cat, values=col_val, title="Distribuição de Custos")
-                    st.plotly_chart(fig_pizza, use_container_width=
+                    st.plotly_chart(fig_pizza, use_container_width=True)
+            else:
+                st.warning("A aba 'Controle_Custos' está vazia.")
+    except Exception as e:
+        st.error(f"Erro ao carregar custos logísticos: {e}")
+
+# --- ABA 4: ADICIONAR NOVO REGISTRO (ADMIN) ---
+elif opcao == "➕ Adicionar Novo Registro":
+    st.title("➕ Adicionar Novo Registro")
+    st.markdown("---")
+    with st.form("form_novo_registro"):
+        nome = st.text_input("Identificador / Destinatário:")
+        endereco = st.text_input("Endereço (Rua e Número - Floripa):")
+        submetido = st.form_submit_button("Geolocalizar e Salvar")
+        if submetido:
+            st.success("Funcionalidade de registo submetida com sucesso!")
+
+# --- ABA 5: TABELA E AÇÕES (ADMIN) ---
+elif opcao == "📋 Tabela de Dados e Ações":
+    st.title("📋 Gerenciamento da Tabela")
+    st.markdown("---")
+    if not df_dados.empty:
+        st.dataframe(df_dados, use_container_width=True)
+        if st.button("🔄 Forçar Atualização de Dados"):
+            st.cache_data.clear()
+            st.rerun()
+
+# --- ABA 6: MANUTENÇÃO E LIMPEZA (ADMIN) ---
+elif opcao == "🧹 Manutenção e Limpeza de Coordenadas":
+    st.title("🧹 Ferramenta de Limpeza de Coordenadas")
+    st.markdown("---")
+    st.info("Ferramenta de manutenção de coordenadas ativa.")

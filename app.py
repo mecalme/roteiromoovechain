@@ -163,10 +163,6 @@ if opcao == "📊 Dashboard Auditorias":
                 df_bairro.columns = ["Bairro", "Quantidade"]
                 fig_bairro = px.bar(df_bairro, x="Bairro", y="Quantidade", title="Volume por Bairro")
                 st.plotly_chart(fig_bairro, use_container_width=True)
-                
-        st.markdown("---")
-        st.subheader("Base de Dados Completa Visualizada")
-        st.dataframe(df_dados, use_container_width=True)
     else:
         st.warning("Não foram encontrados dados de auditoria ou a coluna 'Status' não está presente.")
 

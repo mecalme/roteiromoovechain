@@ -166,8 +166,10 @@ elif opcao == "🗺️ Mapa de Pontos":
     if not df_dados.empty and "Latitude" in df_dados.columns and "Longitude" in df_dados.columns:
         m = folium.Map(location=[-27.5954, -48.5480], zoom_start=12)
         
-        # 1. Instancia o MarkerCluster para agrupar os pontos próximos e evitar sobreposição
         marker_cluster = MarkerCluster().add_to(m)
+        
+        # Lista para armazenar as coordenadas e ajustar o zoom automaticamente depois
+        coordenadas = []
         
         for _, row in df_dados.iterrows():
             try:
@@ -176,14 +178,23 @@ elif opcao == "🗺️ Mapa de Pontos":
                 nome = row.get("Destinatário", "Ponto")
                 status = row.get("Status", "Desconhecido")
                 
-                # 2. Adiciona o marcador ao 'marker_cluster' em vez de diretamente no mapa 'm'
+                coordenadas.append([lat, lon])
+                
+                # Definindo cores dinâmicas baseadas no status (exemplo)
+                cor_icone = "green" if status.lower() == "concluído" else "orange"
+                
                 folium.Marker(
                     [lat, lon], 
-                    popup=f"<b>{nome}</b><br>Status: {status}"
+                    popup=f"<b>{nome}</b><br>Status: <i>{status}</i>",
+                    icon=folium.Icon(color=cor_icone, icon="info-sign")
                 ).add_to(marker_cluster)
                 
             except:
                 continue
+        
+        # Ajusta o zoom automaticamente para abranger todos os pontos do DataFrame
+        if coordenadas:
+            m.fit_bounds(coordenadas)
                 
         st_folium(m, width=1200, height=500)
     else:

@@ -230,9 +230,9 @@ elif opcao == "🗺️ Mapa de Pontos":
             st.warning("Nenhum ponto com coordenadas válidas para exibição.")
 
 # --- ABA 3: CUSTOS LOGÍSTICOS ---
-elif opcao == "🚛 Custo Logístico de Frota":  # (ou o nome exato que usas no teu menu)
+elif opcao == "🚛 Custos Logísticos (frota)":  # (ou o nome exato que usas no teu menu)
     if st.session_state.get("admin_autenticado", False):
-        st.subheader("🚛 Custo Logístico de Frota")
+        st.subheader("🚛 Custo Logísticos (frota)")
         st.markdown("---")
         try:
             gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])

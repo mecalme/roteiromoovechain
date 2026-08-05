@@ -64,9 +64,8 @@ def carregar_dados():
         return pd.DataFrame()
     try:
         sh = client.open("Roteiro MooveChain Florianóplis 2026")
-        # Ajusta para o nome exato da aba principal de dados, caso exista
         try:
-            aba = sh.worksheet("Página1") # Altere se a sua aba principal tiver outro nome
+            aba = sh.worksheet("Página1") 
         except:
             aba = sh.get_worksheet(0)
         dados = aba.get_all_records()
@@ -86,3 +85,108 @@ def geolocalizar_endereco(endereco: str):
         loc = geolocator.geocode(endereco + ", Florianópolis, SC, Brasil")
         if loc:
             return loc.latitude, loc.longitude
+    except Exception as e:
+        logging.error(f"Erro na geolocalização: {e}")
+    return "", ""
+
+# -----------------------------------------------------------------------------
+# 5. CONTROLE DE ACESSO E MENU LATERAL
+# -----------------------------------------------------------------------------
+st.sidebar.title("🚚 MooveChain")
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔒 Autenticação")
+
+if not st.session_state["autenticado"]:
+    senha_digitada = st.sidebar.text_input("Senha Admin", type="password", key="input_senha")
+    senha_correta = st.secrets.get("ADMIN_PASSWORD", "moovechain2026")
+    
+    if st.sidebar.button("Entrar"):
+        if senha_digitada == senha_correta:
+            st.session_state["autenticado"] = True
+            st.rerun()
+        else:
+            st.sidebar.error("Senha incorreta!")
+else:
+    st.sidebar.success("Modo Administrador Ativo")
+    if st.sidebar.button("Sair (Logout)"):
+        st.session_state["autenticado"] = False
+        st.rerun()
+
+st.sidebar.markdown("---")
+
+# Definição restrita do menu: abas administrativas só aparecem se autenticado
+opcoes_menu = [
+    "📊 Dashboard Auditorias", 
+    "🗺️ Mapa de Pontos"
+]
+
+if st.session_state["autenticado"]:
+    opcoes_menu.extend([
+        "🚛 Custos Logísticos (Frota)",
+        "➕ Adicionar Novo Registro", 
+        "📋 Tabela de Dados e Ações", 
+        "🧹 Manutenção e Limpeza de Coordenadas"
+    ])
+
+opcao = st.sidebar.radio("Navegação:", opcoes_menu, label_visibility="collapsed")
+
+# -----------------------------------------------------------------------------
+# 6. RENDERIZAÇÃO DAS ABAS / PÁGINAS
+# -----------------------------------------------------------------------------
+try:
+    df_dados = carregar_dados()
+except Exception as e:
+    df_dados = pd.DataFrame()
+    st.error(f"Erro crítico ao carregar dados: {e}")
+
+# --- ABA 1: DASHBOARD ---
+if opcao == "📊 Dashboard Auditorias":
+    st.title("📊 Dashboard Auditorias MooveChain")
+    st.markdown("---")
+    
+    if not df_dados.empty:
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total de Registros", len(df_dados))
+        with col2:
+            st.metric("Colunas Identificadas", len(df_dados.columns))
+        with col3:
+            st.metric("Status da Conexão", "Online 🟢")
+        
+        st.subheader("Base de Dados Geral")
+        st.dataframe(df_dados, use_container_width=True)
+    else:
+        st.info("A base de dados está vazia ou a carregar. Verifique a ligação ao Google Sheets.")
+
+# --- ABA 2: MAPA DE PONTOS ---
+elif opcao == "🗺️ Mapa de Pontos":
+    st.title("🗺️ Mapa Geográfico de Pontos")
+    st.markdown("---")
+    st.info("Funcionalidade do mapa de pontos em exibição.")
+
+# --- ABA 3: CUSTOS LOGÍSTICOS ---
+elif opcao == "🚛 Custos Logísticos (Frota)":
+    st.title("🚛 Custos Logísticos (Frota)")
+    st.markdown("---")
+    try:
+        gc = obter_cliente_gspread()
+        if gc:
+            sh = gc.open("Roteiro MooveChain Florianóplis 2026")
+            aba_custos = sh.worksheet("Controle_Custos")
+            dados_custos = aba_custos.get_all_records()
+            
+            if dados_custos:
+                df_custos = pd.DataFrame(dados_custos)
+                st.subheader("Quadro de Custos")
+                st.dataframe(df_custos, use_container_width=True)
+                
+                # Gráfico de pizza ajustado para exibir os dados de custos
+                if "Categoria" in df_custos.columns and "Valor" in df_custos.columns:
+                    fig_pizza = px.pie(df_custos, names="Categoria", values="Valor", title="Distribuição de Custos por Categoria")
+                    st.plotly_chart(fig_pizza, use_container_width=True)
+                elif len(df_custos.columns) >= 2:
+                    # Caso os nomes das colunas difiram ligeiramente, pega a 1ª como categoria e a 2ª como valor numérico
+                    col_cat = df_custos.columns[0]
+                    col_val = df_custos.columns[1]
+                    fig_pizza = px.pie(df_custos, names=col_cat, values=col_val, title="Distribuição de Custos")
+                    st.plotly_chart(fig_pizza, use_container_width=

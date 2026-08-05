@@ -149,7 +149,7 @@ if opcao == "📊 Dashboard Auditorias":
                 x="Bairro",
                 y="Quantidade",
                 color="Status",
-                barmode="group",
+                barmode="stack",  # Mudado para "stack" para ficarem empilhados na mesma barra
                 title="Auditorias por Bairro e Status",
                 color_discrete_sequence=px.colors.qualitative.Bold
             )

@@ -164,15 +164,26 @@ elif opcao == "🗺️ Mapa de Pontos":
     st.markdown("---")
     if not df_dados.empty and "Latitude" in df_dados.columns and "Longitude" in df_dados.columns:
         m = folium.Map(location=[-27.5954, -48.5480], zoom_start=12)
+        
+        # 1. Instancia o MarkerCluster para agrupar os pontos próximos e evitar sobreposição
+        marker_cluster = MarkerCluster().add_to(m)
+        
         for _, row in df_dados.iterrows():
             try:
                 lat = float(row["Latitude"])
                 lon = float(row["Longitude"])
                 nome = row.get("Destinatário", "Ponto")
                 status = row.get("Status", "Desconhecido")
-                folium.Marker([lat, lon], popup=f"<b>{nome}</b><br>Status: {status}").add_to(m)
+                
+                # 2. Adiciona o marcador ao 'marker_cluster' em vez de diretamente no mapa 'm'
+                folium.Marker(
+                    [lat, lon], 
+                    popup=f"<b>{nome}</b><br>Status: {status}"
+                ).add_to(marker_cluster)
+                
             except:
                 continue
+                
         st_folium(m, width=1200, height=500)
     else:
         st.info("Dados geográficos indisponíveis.")

@@ -9,9 +9,7 @@ from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 from google.oauth2.service_account import Credentials
 
-# -----------------------------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA E ESTILOS CSS
-# -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Roteiro MooveChain Florianópolis 2026",
     page_icon="🚚",
@@ -22,44 +20,38 @@ st.set_page_config(
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 st.markdown("""
-<style>
+    <style>
     .main { background-color: #f8f9fa; }
     .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
     .stButton>button { border-radius: 8px; font-weight: bold; }
-</style>
+    </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------------------------------------------------------
 # 2. INICIALIZAÇÃO DE ESTADOS NA SESSÃO
-# -----------------------------------------------------------------------------
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
-# -----------------------------------------------------------------------------
-# 3. FUNÇÃO DE CARREGAMENTO DE DADOS DO GOOGLE SHEETS
-# -----------------------------------------------------------------------------
+# 3. FUNÇÃO DE CARREGAMENTO DE DADOS ROBUSTA
 @st.cache_data(ttl=60)
 def carregar_dados():
     try:
-        scope = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive"
-        ]
-        
-        if "gcp_service_account" not in st.secrets:
-            st.error("Erro: As credenciais 'gcp_service_account' não foram encontradas nos Secrets do Streamlit.")
-            return pd.DataFrame()
-            
         credentials_dict = dict(st.secrets["gcp_service_account"])
-        credentials = Credentials.from_service_account_info(credentials_dict, scopes=scope)
-        gc = gspread.authorize(credentials)
-        
-        # Nome exato da planilha configurada
+        creds = Credentials.from_service_account_info(
+            credentials_dict,
+            scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+        )
+        gc = gspread.authorize(creds)
         sh = gc.open("Roteiro MooveChain Florianóplis 2026")
         worksheet = sh.worksheet("Planilha1")
-        
         dados = worksheet.get_all_records()
         df = pd.DataFrame(dados)
+        
+        # Limpeza de espaços em branco nas colunas de texto crítico
+        if "Status" in df.columns:
+            df["Status"] = df["Status"].astype(str).str.strip()
+        if "Bairro" in df.columns:
+            df["Bairro"] = df["Bairro"].astype(str).str.strip()
+            
         return df
     except Exception as e:
         st.error(f"Erro ao carregar dados do Google Sheets: {e}")
@@ -67,95 +59,78 @@ def carregar_dados():
 
 df_dados = carregar_dados()
 
-# -----------------------------------------------------------------------------
-# 4. MENU LATERAL E CONTROLE DE AUTENTICAÇÃO (ADMIN)
-# -----------------------------------------------------------------------------
-st.sidebar.image("https://img.icons8.com/color/96/delivery--v1.png", width=80)
-st.sidebar.title("MooveChain 2026")
+# 4. MENU LATERAL E CONTROLE DE ACESSO
+st.sidebar.title("Navegação")
+opcao_publica = ["📊 Dashboard Auditorias", "🗺️ Mapa de Pontos"]
+opcao_admin = ["🚛 Custos Logísticos (frota)", "➕ Adicionar Novo Registro", "📋 Tabela de Dados e Ações", "🔧 Manutenção e Limpeza"]
 
-# Opções padrão visíveis para qualquer usuário
-opcoes_publicas = [
-    "📊 Dashboard Auditorias",
-    "🗺️ Mapa de Pontos"
-]
-
-# Opções restritas que só aparecem se o administrador introduzir a chave correta
-opcoes_restritas = [
-    "🚛 Custos Logísticos (frota)",
-    "➕ Adicionar Novo Registro",
-    "📋 Tabela de Dados e Ações",
-    "🛠️ Manutenção e Limpeza de Coordenadas"
-]
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("🔒 Acesso Restrito (Admin)")
-senha_digitada = st.sidebar.text_input("Palavra-passe Admin:", type="password")
-
-senha_correta = st.secrets.get("ADMIN_PASSWORD", "admin123")
-
-if senha_digitada == senha_correta:
-    st.session_state["autenticado"] = True
-    st.sidebar.success("Modo Administrador Ativo!")
-else:
-    if senha_digitada:
-        st.sidebar.error("Palavra-passe incorreta.")
-    st.session_state["autenticado"] = False
-
-# Monta o menu dinamicamente com base no estado de autenticação
 if st.session_state["autenticado"]:
-    lista_menu = opcoes_publicas + opcoes_restritas
+    opcao = st.sidebar.selectbox("Menu", opcao_publica + opcao_admin)
+    if st.sidebar.button("🔓 Terminar Sessão Admin"):
+        st.session_state["autenticado"] = False
+        st.rerun()
 else:
-    lista_menu = opcoes_publicas
+    opcao = st.sidebar.selectbox("Menu", opcao_publica)
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Acesso Restrito (Admin)")
+    senha_digitada = st.sidebar.text_input("Palavra-passe", type="password")
+    senha_admin = st.secrets.get("ADMIN_PASSWORD", "moovechain2026")
+    if st.sidebar.button("Entrar"):
+        if senha_digitada == senha_admin:
+            st.session_state["autenticado"] = True
+            st.success("Autenticado com sucesso!")
+            st.rerun()
+        else:
+            st.sidebar.error("Senha incorreta!")
 
-opcao = st.sidebar.selectbox("Navegação do Menu", lista_menu)
-
-st.sidebar.markdown("---")
-st.sidebar.info("Projeto de Auditoria e Logística - Florianópolis 2026")
-
-# -----------------------------------------------------------------------------
-# 5. LÓGICA DAS ABAS DA APLICAÇÃO
-# -----------------------------------------------------------------------------
-
-# --- ABA 1: DASHBOARD AUDITORIAS ---
+# --- ABA 1: DASHBOARD ---
 if opcao == "📊 Dashboard Auditorias":
     st.title("📊 Dashboard Auditorias MooveChain")
-    st.markdown("Visão geral dos indicadores de auditorias realizadas e pendentes na região.")
+    st.markdown("---")
     
-    if not df_dados.empty and "Status" in df_dados.columns:
-        # Cálculo das métricas solicitadas
+    if not df_dados.empty:
+        # Normalização e cálculo seguro das métricas incluindo Justificadas
         total_auditorias = len(df_dados)
         
-        # Normaliza textos de status para evitar falhas por maiúsculas/minúsculas
-        status_col = df_dados["Status"].astype(str).str.strip().str.capitalize()
-        
-        total_pendentes = len(df_dados[status_col == "Pendente"])
-        total_justificadas = len(df_dados[status_col == "Justificada"])
-        total_canceladas = len(df_dados[status_col == "Cancelada"])
-        total_auditados = len(df_dados[status_col == "Auditado"])
+        # Tratamento flexível para capturar variações de maiúsculas/minúsculas/acentos
+        def contar_status(val):
+            if "Status" not in df_dados.columns:
+                return 0
+            s = df_dados["Status"].astype(str).str.lower()
+            return len(df_dados[s.str.contains(val.lower(), na=False)])
 
-        # Exibição dos quadros (métricas) no topo
+        pendentes = contar_status("pendente")
+        justificadas = contar_status("justificad")  # captura justificada ou justificado
+        canceladas = contar_status("cancelad")     # captura cancelada ou cancelado
+        auditadas = contar_status("auditad")       # captura auditado ou auditada
+
+        # Layout de métricas atualizado no topo
         col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Total de Auditorias", total_auditorias)
-        col2.metric("Auditados", total_auditados)
-        col3.metric("Pendentes", total_pendentes)
-        col4.metric("Justificadas", total_justificadas)
-        col5.metric("Canceladas", total_canceladas)
+        col2.metric("Auditadas", auditadas)
+        col3.metric("Pendentes", pendentes)
+        col4.metric("Justificadas", justificadas)
+        col5.metric("Canceladas", canceladas)
         
         st.markdown("---")
         
-        # Gráficos e visualizações adicionais do Dashboard
+        # Gráficos existentes (Pizza de Status e Volume por Bairro Geral)
         col_g1, col_g2 = st.columns(2)
+        
         with col_g1:
             st.subheader("Distribuição por Status")
-            fig_status = px.pie(
-                df_dados, 
-                names="Status", 
-                title="Proporção de Status das Auditorias",
-                hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Set3
-            )
-            st.plotly_chart(fig_status, use_container_width=True)
-            
+            if "Status" in df_dados.columns:
+                df_status = df_dados["Status"].value_counts().reset_index()
+                df_status.columns = ["Status", "Quantidade"]
+                fig_status = px.pie(
+                    df_status, 
+                    names="Status", 
+                    values="Quantidade", 
+                    hole=0.4, 
+                    color_discrete_sequence=px.colors.qualitative.Set3
+                )
+                st.plotly_chart(fig_status, use_container_width=True)
+                
         with col_g2:
             st.subheader("Auditorias por Bairro / Cidade")
             if "Bairro" in df_dados.columns:
@@ -163,81 +138,92 @@ if opcao == "📊 Dashboard Auditorias":
                 df_bairro.columns = ["Bairro", "Quantidade"]
                 fig_bairro = px.bar(df_bairro, x="Bairro", y="Quantidade", title="Volume por Bairro")
                 st.plotly_chart(fig_bairro, use_container_width=True)
+                
+        # NOVO GRÁFICO: Quantidade por Bairro discriminado por Status
+        st.markdown("---")
+        st.subheader("📍 Volume por Bairro detalhado por Status (Auditado, Justificado, Cancelado, Pendente)")
+        if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
+            df_bairro_status = df_dados.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
+            fig_bairro_status = px.bar(
+                df_bairro_status,
+                x="Bairro",
+                y="Quantidade",
+                color="Status",
+                barmode="group",
+                title="Auditorias por Bairro e Status",
+                color_discrete_sequence=px.colors.qualitative.Bold
+            )
+            st.plotly_chart(fig_bairro_status, use_container_width=True)
+            
     else:
-        st.warning("Não foram encontrados dados de auditoria ou a coluna 'Status' não está presente.")
+        st.warning("Nenhum dado encontrado para exibir no Dashboard.")
 
 # --- ABA 2: MAPA DE PONTOS ---
 elif opcao == "🗺️ Mapa de Pontos":
     st.title("🗺️ Mapa Geográfico de Pontos")
-    st.markdown("Visualização espacial dos locais auditados e pendentes.")
-    
+    st.markdown("---")
     if not df_dados.empty and "Latitude" in df_dados.columns and "Longitude" in df_dados.columns:
         m = folium.Map(location=[-27.5954, -48.5480], zoom_start=12)
-        
-        for idx, row in df_dados.iterrows():
+        for _, row in df_dados.iterrows():
             try:
                 lat = float(row["Latitude"])
                 lon = float(row["Longitude"])
-                nome_dest = row.get("Destinatário", "Ponto")
-                status_p = row.get("Status", "Desconhecido")
-                
-                cor = "green" if status_p == "Auditado" else "orange"
-                
-                folium.Marker(
-                    [lat, lon],
-                    popup=f"<b>{nome_dest}</b><br>Status: {status_p}",
-                    icon=folium.Icon(color=cor, icon="info-sign")
-                ).add_to(m)
-            except Exception:
+                nome = row.get("Destinatário", "Ponto")
+                status = row.get("Status", "Desconhecido")
+                folium.Marker([lat, lon], popup=f"<b>{nome}</b><br>Status: {status}").add_to(m)
+            except:
                 continue
-                
-        st_folium(m, width=1100, height=550)
+        st_folium(m, width=1200, height=500)
     else:
-        st.warning("Coordenadas geográficas não disponíveis na base de dados.")
+        st.info("Dados geográficos indisponíveis.")
 
 # --- ABA 3: CUSTOS LOGÍSTICOS (ADMIN) ---
 elif opcao == "🚛 Custos Logísticos (frota)":
-    st.subheader("🚛 Custos Logísticos (frota)")
-    st.markdown("Painel restrito de acompanhamento de despesas de frota e abastecimento.")
-    st.markdown("---")
-    try:
-        gc = gspread.service_account_from_dict(st.secrets["gcp_service_account"])
-        sh = gc.open("Roteiro MooveChain Florianóplis 2026")
-        aba_custos = sh.worksheet("Controle_Custos")
-        dados_custos = aba_custos.get_all_records()
-        
-        if dados_custos:
+    if st.session_state.get("autenticado", False):
+        st.subheader("🚛 Custos Logísticos (frota)")
+        st.markdown("---")
+        try:
+            credentials_dict = dict(st.secrets["gcp_service_account"])
+            creds = Credentials.from_service_account_info(
+                credentials_dict,
+                scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+            )
+            gc = gspread.authorize(creds)
+            sh = gc.open("Roteiro MooveChain Florianóplis 2026")
+            aba_custos = sh.worksheet("Controle_Custos")
+            dados_custos = aba_custos.get_all_records()
             df_custos = pd.DataFrame(dados_custos)
             st.dataframe(df_custos, use_container_width=True)
-            
-            if "Valor" in df_custos.columns:
-                fig_pizza = px.pie(df_custos, names="Destinatário" if "Destinatário" in df_custos.columns else df_custos.columns[0], values="Valor", title="Distribuição de Custos")
-                st.plotly_chart(fig_pizza, use_container_width=True)
-        else:
-            st.info("A aba 'Controle_Custos' encontra-se vazia.")
-    except Exception as e:
-        st.error(f"Erro ao carregar dados de custos logísticos: {e}")
+        except Exception as e:
+            st.error(f"Erro ao carregar custos: {e}")
+    else:
+        st.warning("Acesso restrito. Insira a palavra-passe de administrador na barra lateral.")
 
 # --- ABA 4: ADICIONAR NOVO REGISTRO (ADMIN) ---
 elif opcao == "➕ Adicionar Novo Registro":
-    st.title("➕ Adicionar Novo Registro")
-    with st.form("form_novo_registro"):
-        nome = st.text_input("Identificador / Destinatário:")
-        endereco = st.text_input("Endereço (Rua e Número - Floripa):")
-        submetido = st.form_submit_button("Geolocalizar e Salvar")
-        
-        if submetido:
-            st.success(f"Registro '{nome}' processado com sucesso!")
+    if st.session_state.get("autenticado", False):
+        st.title("➕ Adicionar Novo Registro")
+        with st.form("form_novo_registro"):
+            nome = st.text_input("Identificador / Destinatário:")
+            endereco = st.text_input("Endereço (Rua e Número - Floripa):")
+            submetido = st.form_submit_button("Geolocalizar e Salvar")
+            if submetido:
+                st.success("Registro submetido com sucesso!")
+    else:
+        st.warning("Acesso restrito.")
 
 # --- ABA 5: TABELA DE DADOS E AÇÕES (ADMIN) ---
 elif opcao == "📋 Tabela de Dados e Ações":
-    st.title("📋 Tabela de Dados e Ações (Admin)")
-    if not df_dados.empty:
+    if st.session_state.get("autenticado", False):
+        st.title("📋 Tabela de Dados e Gestão")
         st.dataframe(df_dados, use_container_width=True)
     else:
-        st.info("Nenhum dado disponível para gestão.")
+        st.warning("Acesso restrito.")
 
-# --- ABA 6: MANUTENÇÃO E LIMPEZA DE COORDENADAS (ADMIN) ---
-elif opcao == "🛠️ Manutenção e Limpeza de Coordenadas":
-    st.title("🛠️ Manutenção e Limpeza de Coordenadas")
-    st.markdown("Ferramenta de validação e correção de geolocalização em lote.")
+# --- ABA 6: MANUTENÇÃO (ADMIN) ---
+elif opcao == "🔧 Manutenção e Limpeza":
+    if st.session_state.get("autenticado", False):
+        st.title("🔧 Manutenção e Limpeza de Coordenadas")
+        st.write("Painel de manutenção administrativa.")
+    else:
+        st.warning("Acesso restrito.")

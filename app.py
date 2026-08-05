@@ -7,7 +7,9 @@ import folium
 import streamlit as st
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
-from oauth2client.service_account import ServiceAccountCredentials
+
+# NOVO IMPORT: Biblioteca de autenticação moderna e suportada pelo Google
+from google.oauth2.service_account import Credentials 
 
 # -----------------------------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA E ESTILOS CSS
@@ -51,73 +53,78 @@ if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
 # -----------------------------------------------------------------------------
-# 3. CONEXÃO COM O GOOGLE SHEETS
+# 3. CONEXÃO COM O GOOGLE SHEETS (NOVA LÓGICA DE AUTENTICAÇÃO)
 # -----------------------------------------------------------------------------
-@st.cache_resource(show_spinner="Conectando ao Google Sheets...")
+@st.cache_resource(show_spinner="Autenticando no Google Drive...")
 def obter_cliente_gspread():
-    """Autentica e retorna o cliente do gspread usando st.secrets."""
+    """Autentica e retorna o cliente gspread usando a biblioteca google-auth moderna."""
     try:
-        escopo = [
-            "https://spreadsheets.google.com/feeds",
+        # Novos escopos modernos recomendados pela Google
+        escopos = [
+            "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
         ]
-        credenciais_dict = dict(st.secrets["gcp_service_account"])
-        credenciais = ServiceAccountCredentials.from_json_keyfile_dict(credenciais_dict, escopo)
+        
+        # Obtém o dicionário de credenciais dos secrets
+        # Nota: Ajuste "gcp_service_account" para o nome que você usou no seu secrets.toml
+        # Pode ser que esteja como "google_credentials" ou algo similar no seu ambiente.
+        cred_dict = dict(st.secrets["gcp_service_account"])
+        
+        # TRATAMENTO CRÍTICO: Corrige a quebra de linha da chave privada para evitar o erro de RSA Inválida
+        if "private_key" in cred_dict:
+            cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
+            
+        # Cria as credenciais e autoriza a conexão
+        credenciais = Credentials.from_service_account_info(cred_dict, scopes=escopos)
         return gspread.authorize(credenciais)
+        
     except Exception as e:
-        logging.error(f"Erro ao autenticar no Google Sheets: {e}")
-        st.error("Não foi possível conectar ao Google Sheets. Verifique as credenciais em st.secrets.")
+        logging.error(f"Erro Crítico de Autenticação: {e}")
+        st.error(f"Falha na autenticação com o Google: {e}. Verifique as chaves no Painel do Streamlit.")
         return None
 
-@st.cache_data(ttl=300, show_spinner="Carregando dados da planilha...")
+@st.cache_data(ttl=300, show_spinner="Baixando dados da planilha...")
 def carregar_dados():
-    """Carrega os dados da planilha e converte para DataFrame Pandas."""
+    """Abre a planilha e converte os dados para um DataFrame do Pandas."""
     client = obter_cliente_gspread()
     if not client:
         return pd.DataFrame()
+        
     try:
-        sheet_url = st.secrets.get("SHEET_URL", "")
-        if sheet_url:
-            sheet = client.open_by_url(sheet_url).sheet1
-        else:
-            sheet = client.open("Roteiro MooveChain").sheet1
+        # Abre a planilha pelo nome exato do arquivo (recomendado usar URL se o nome falhar)
+        # Se preferir usar URL: sheet = client.open_by_url("SUA_URL_AQUI").sheet1
+        sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
         
         dados = sheet.get_all_records()
         df = pd.DataFrame(dados)
         return df
     except Exception as e:
-        logging.error(f"Erro ao carregar dados: {e}")
-        st.error(f"Erro ao acessar a planilha: {e}")
+        logging.error(f"Erro ao ler os dados da planilha: {e}")
+        st.error("Conexão feita, mas não foi possível ler a planilha. Verifique se o e-mail de serviço tem permissão de Editor nela.")
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
 # 4. FUNÇÃO DE GEOLOCALIZAÇÃO
 # -----------------------------------------------------------------------------
 def geolocalizar_endereco(endereco: str):
-    """
-    Geolocaliza um endereço em Florianópolis/SC e valida as coordenadas.
-    Retorna uma tupla (latitude, longitude) ou ("","") em caso de falha.
-    """
     if not endereco or not isinstance(endereco, str):
         return "", ""
         
     geolocator = Nominatim(user_agent="moovechain_geocoder_app_v2")
     try:
-        # Força o contexto para Florianópolis, SC
         query = f"{endereco}, Florianópolis, Santa Catarina, Brasil"
         location = geolocator.geocode(query, timeout=10)
         
         if location:
             lat, lon = location.latitude, location.longitude
-            
-            # Limites geográficos (Bounding Box) de Florianópolis e arredores próximos
+            # Limites geográficos de Florianópolis e arredores
             if -27.90 <= lat <= -27.35 and -48.70 <= lon <= -48.30:
                 return str(lat), str(lon)
             else:
-                logging.warning(f"Endereço '{endereco}' gerou coordenadas fora do limite: ({lat}, {lon})")
+                logging.warning(f"Coordenadas ignoradas por estarem fora da região: ({lat}, {lon})")
                 return "", ""
     except Exception as e:
-        logging.error(f"Falha na geolocalização do endereço '{endereco}': {e}")
+        logging.error(f"Erro na geolocalização: {e}")
         
     return "", ""
 
@@ -127,11 +134,10 @@ def geolocalizar_endereco(endereco: str):
 st.sidebar.title("🚚 MooveChain")
 st.sidebar.markdown("---")
 
-# Seção de Login na Sidebar
 st.sidebar.subheader("🔒 Autenticação")
 if not st.session_state["autenticado"]:
     senha_digitada = st.sidebar.text_input("Senha Admin", type="password", key="input_senha")
-    senha_correta = st.secrets.get("ADMIN_PASSWORD", "admin123")
+    senha_correta = st.secrets.get("ADMIN_PASSWORD", "moovechain2026") # Senha padrão atualizada
     
     if st.sidebar.button("Entrar"):
         if senha_digitada == senha_correta:
@@ -148,7 +154,7 @@ else:
 
 st.sidebar.markdown("---")
 
-# Construção Dinâmica das Opções do Menu
+# Opções de Menu
 OPCOES_MENU = [
     "📊 Dashboard Auditorias",
     "🗺️ Mapa de Pontos",
@@ -162,7 +168,7 @@ if st.session_state["autenticado"]:
         "🧹 Manutenção e Limpeza de Coordenadas"
     ])
 
-opcao = st.sidebar.radio("Selecione a Ferramenta:", OPCOES_MENU)
+opcao = st.sidebar.radio("Navegação:", OPCOES_MENU, label_visibility="collapsed")
 
 # -----------------------------------------------------------------------------
 # 6. RENDERIZAÇÃO DAS ABAS / PÁGINAS
@@ -174,20 +180,21 @@ if opcao == "📊 Dashboard Auditorias":
     st.title("📊 Dashboard Auditorias MooveChain")
     
     if df_dados.empty:
-        st.warning("Nenhum dado encontrado na planilha.")
+        st.warning("Nenhum dado encontrado na planilha. Verifique a aba de manutenção.")
     else:
         c1, c2, c3 = st.columns(3)
         c1.metric("Total de Registros", len(df_dados))
         
         col_status = next((c for c in df_dados.columns if "status" in c.lower()), None)
         if col_status:
-            c2.metric("Status Concluídos", len(df_dados[df_dados[col_status].astype(str).str.lower() == "concluído"]))
-            c3.metric("Status Pendentes", len(df_dados[df_dados[col_status].astype(str).str.lower() != "concluído"]))
+            concluidos = len(df_dados[df_dados[col_status].astype(str).str.lower().isin(["concluído", "auditado"])])
+            c2.metric("Pontos Auditados", concluidos)
+            c3.metric("Pontos Pendentes", len(df_dados) - concluidos)
             
-            fig = px.pie(df_dados, names=col_status, title="Distribuição por Status")
+            fig = px.pie(df_dados, names=col_status, title="Distribuição por Status", hole=0.3)
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Coluna de 'Status' não encontrada para métricas detalhadas.")
+            st.info("Gráfico indisponível: Coluna 'Status' não encontrada na base.")
 
 # --- ABA 2: MAPA DE PONTOS ---
 elif opcao == "🗺️ Mapa de Pontos":
@@ -197,12 +204,10 @@ elif opcao == "🗺️ Mapa de Pontos":
     col_lon = next((c for c in df_dados.columns if "lon" in c.lower() or "lng" in c.lower()), None)
     
     if col_lat and col_lon:
-        # Converte e filtra coordenadas válidas
         df_mapa = df_dados.copy()
         df_mapa["lat_num"] = pd.to_numeric(df_mapa[col_lat], errors="coerce")
         df_mapa["lon_num"] = pd.to_numeric(df_mapa[col_lon], errors="coerce")
         
-        # Filtra dentro dos limites válidos de Florianópolis
         df_mapa = df_mapa.dropna(subset=["lat_num", "lon_num"])
         df_mapa = df_mapa[
             (df_mapa["lat_num"] >= -27.90) & (df_mapa["lat_num"] <= -27.35) &
@@ -212,7 +217,7 @@ elif opcao == "🗺️ Mapa de Pontos":
         if not df_mapa.empty:
             m = folium.Map(location=[-27.5948, -48.5482], zoom_start=11)
             for _, row in df_mapa.iterrows():
-                info = str(row.get("Nome", row.get("Endereco", "Ponto MooveChain")))
+                info = str(row.get(df_mapa.columns[0], "Ponto MooveChain"))
                 folium.Marker(
                     location=[row["lat_num"], row["lon_num"]],
                     popup=info,
@@ -221,59 +226,46 @@ elif opcao == "🗺️ Mapa de Pontos":
                 ).add_to(m)
             
             st_folium(m, width=1100, height=500)
-            st.caption(f"Exibindo {len(df_mapa)} pontos geolocalizados com sucesso.")
         else:
-            st.warning("Nenhum ponto com coordenadas válidas em Florianópolis foi encontrado.")
-    else:
-        st.error("Colunas de Latitude e Longitude não encontradas no DataFrame.")
+            st.warning("Nenhum ponto com coordenadas válidas para exibição.")
 
 # --- ABA 3: CUSTOS LOGÍSTICOS ---
 elif opcao == "🚚 Custos Logísticos (Frota)":
-    st.title("🚚 Controle de Custos Logísticos (Frota)")
-    st.info("Módulo de gestão financeira e operacional da frota MooveChain.")
-    
+    st.title("🚚 Controle de Custos Logísticos")
+    st.info("Acesse a aba de controle da frota.")
     if not df_dados.empty:
-        st.dataframe(df_dados.head(10), use_container_width=True)
+        st.dataframe(df_dados.head(20), use_container_width=True)
 
 # --- ABA 4: ADICIONAR NOVO REGISTRO (ADMIN) ---
 elif opcao == "➕ Adicionar Novo Registro":
     st.title("➕ Adicionar Novo Registro")
-    
     with st.form("form_novo_registro"):
-        nome = st.text_input("Nome / Identificador:")
-        endereco = st.text_input("Endereço (Florianópolis):")
-        observacao = st.text_area("Observações:")
-        
-        submetido = st.form_submit_button("Salvar Registro")
+        nome = st.text_input("Identificador / Destinatário:")
+        endereco = st.text_input("Endereço (Rua e Número - Floripa):")
+        submetido = st.form_submit_button("Geolocalizar e Salvar")
         
         if submetido:
-            if not endereco:
-                st.error("Por favor, preencha o endereço.")
-            else:
+            if endereco:
                 lat, lon = geolocalizar_endereco(endereco)
                 if lat and lon:
-                    st.success(f"Endereço geolocalizado com sucesso: ({lat}, {lon})")
+                    st.success(f"Sucesso! Coordenadas geradas: ({lat}, {lon})")
                 else:
-                    st.warning("Não foi possível geolocalizar o endereço com precisão. O registro será salvo sem coordenadas ajustadas.")
-                
-                # Lógica para salvar na planilha via gspread...
-                st.cache_data.clear()
+                    st.warning("Atenção: Não foi possível obter as coordenadas precisas para este endereço.")
+            else:
+                st.error("Preencha o endereço.")
 
 # --- ABA 5: TABELA E AÇÕES (ADMIN) ---
 elif opcao == "📋 Tabela de Dados e Ações":
-    st.title("📋 Gerenciamento de Tabela de Dados")
-    
+    st.title("📋 Gerenciamento da Tabela")
     if not df_dados.empty:
         st.dataframe(df_dados, use_container_width=True)
-        
-        if st.button("🔄 Recarregar Dados"):
+        if st.button("🔄 Forçar Atualização de Dados"):
             st.cache_data.clear()
             st.rerun()
 
 # --- ABA 6: MANUTENÇÃO E LIMPEZA (ADMIN) ---
 elif opcao == "🧹 Manutenção e Limpeza de Coordenadas":
-    st.title("🧹 Ferramenta de Limpeza de Coordenadas Inválidas")
-    st.markdown("Identifique e corrija registros que possuem coordenadas fora de Florianópolis ou formatadas incorretamente.")
+    st.title("🧹 Ferramenta de Limpeza de Coordenadas")
     
     col_lat = next((c for c in df_dados.columns if "lat" in c.lower()), None)
     col_lon = next((c for c in df_dados.columns if "lon" in c.lower() or "lng" in c.lower()), None)
@@ -283,16 +275,14 @@ elif opcao == "🧹 Manutenção e Limpeza de Coordenadas":
         df_corrup["lat_num"] = pd.to_numeric(df_corrup[col_lat], errors="coerce")
         df_corrup["lon_num"] = pd.to_numeric(df_corrup[col_lon], errors="coerce")
         
-        # Filtra entradas fora dos limites normais ou nulas
         invalidos = df_corrup[
-            df_corrup["lat_num"].isna() | 
-            df_corrup["lon_num"].isna() |
+            df_corrup["lat_num"].isna() | df_corrup["lon_num"].isna() |
             (df_corrup["lat_num"] < -27.90) | (df_corrup["lat_num"] > -27.35) |
             (df_corrup["lon_num"] < -48.70) | (df_corrup["lon_num"] > -48.30)
         ]
         
-        st.subheader(f"Linhas com Coordenadas Suspeitas ou Inexistentes: {len(invalidos)}")
         if not invalidos.empty:
-            st.dataframe(invalidos[[c for c in [col_lat, col_lon, "Endereco", "Nome"] if c in invalidos.columns]])
+            st.error(f"⚠️ Atenção: {len(invalidos)} registros com coordenadas fora de SC ou corrompidas (ex: -51.635).")
+            st.dataframe(invalidos)
         else:
-            st.success("Todas as coordenadas da planilha parecem estar corretas!")
+            st.success("Tudo certo! Sem lixo geográfico detectado.")

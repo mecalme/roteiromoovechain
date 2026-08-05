@@ -50,6 +50,8 @@ def conectar_google_sheets():
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive"
         ]
+        
+        # Obtém as credenciais do st.secrets
         if "gcp_service_account" in st.secrets:
             cred_dict = dict(st.secrets["gcp_service_account"])
             credenciais = Credentials.from_service_account_info(cred_dict, scopes=escopos)
@@ -102,6 +104,7 @@ df_dados = carregar_dados_principais()
 st.sidebar.title("📍 MooveChain - Florianópolis")
 st.sidebar.markdown("---")
 
+# Gestão de Sessão do Administrador
 if "admin_autenticado" not in st.session_state:
     st.session_state["admin_autenticado"] = False
 
@@ -124,6 +127,7 @@ with st.sidebar.expander("🔐 Painel Administrativo", expanded=not st.session_s
 
 st.sidebar.markdown("---")
 
+# Definição dinâmica das opções do menu com base na autenticação
 opcoes_menu = [
     "🗺️ Mapa Geral", 
     "📋 Tabela de Destinatários e Rotas"
@@ -146,55 +150,28 @@ st.sidebar.markdown(f"<small>🤖 Integração: <br>{EMAIL_INTEGRACAO}</small>",
 # 5. LÓGICA DAS ABAS DA APLICAÇÃO
 # -----------------------------------------------------------------------------
 
-# --- ABA 1: MAPA GERAL PROFISSIONAL ---
+# --- ABA 1: MAPA GERAL ---
 if opcao == "🗺️ Mapa Geral":
-    st.subheader("🗺️ Mapa Interativo de Rotas e Auditorias")
-    st.markdown("Visualização geoespacial completa dos estabelecimentos auditados em Florianópolis.")
+    st.subheader("🗺️ Mapa Geral de Rotas e Auditorias")
     st.markdown("---")
     
     if not df_dados.empty:
-        # Criar mapa centralizado em Florianópolis com estilo profissional
-        m = folium.Map(location=[-27.5954, -48.5480], zoom_start=12, tiles="CartoDB positron")
-        
+        m = folium.Map(location=[-27.5954, -48.5480], zoom_start=12)
         for _, row in df_dados.iterrows():
             try:
                 lat = float(row.get("Latitude", 0))
                 lon = float(row.get("Longitude", 0))
-                status = str(row.get("Status", "Pendente"))
-                
-                # Cores dinâmicas baseadas no status
-                cor_marker = "blue"
-                if status == "Auditado":
-                    cor_marker = "green"
-                elif status == "Pendente":
-                    cor_marker = "orange"
-                elif status == "Cancelado":
-                    cor_marker = "red"
-                elif status == "Justificado":
-                    cor_marker = "purple"
-                
                 if lat != 0 and lon != 0:
-                    popup_html = f"""
-                    <div style="font-family: Arial; font-size: 12px; width: 200px;">
-                        <b>{row.get('Destinatário', 'N/D')}</b><br>
-                        <b>Endereço:</b> {row.get('Endereco_Completo', 'N/D')}<br>
-                        <b>Status:</b> <span style="color: {cor_marker}; font-weight:bold;">{status}</span><br>
-                        <b>Data Visita:</b> {row.get('Data Visita', 'Não realizada')}
-                    </div>
-                    """
-                    
                     folium.Marker(
-                        location=[lat, lon],
-                        popup=folium.Popup(popup_html, max_width=250),
-                        tooltip=row.get('Destinatário', 'Ponto'),
-                        icon=folium.Icon(color=cor_marker, icon="info-sign")
+                        [lat, lon],
+                        popup=f"<b>{row.get('Destinatário')}</b><br>{row.get('Endereco_Completo')}",
+                        tooltip=row.get('Destinatário')
                     ).add_to(m)
-            except Exception as e:
+            except Exception:
                 continue
-                
-        st_folium(m, width="100%", height=550)
+        st_folium(m, width="100%", height=500)
     else:
-        st.warning("Nenhum dado encontrado na planilha principal para exibir no mapa.")
+        st.warning("Nenhum dado encontrado na planilha principal.")
 
 # --- ABA 2: TABELA DE DESTINATÁRIOS ---
 elif opcao == "📋 Tabela de Destinatários e Rotas":
@@ -211,13 +188,12 @@ elif opcao == "🚛 Custo Logístico de Frota":
         st.error("Acesso restrito. Por favor, autentique-se como Administrador no menu lateral.")
     else:
         st.subheader("🚛 Controle de Custos Logísticos da Frota")
-        st.markdown("Dados carregados diretamente da aba **Controle_Custos**.")
         st.markdown("---")
         df_custos = carregar_dados_custos()
         if not df_custos.empty:
             st.dataframe(df_custos, use_container_width=True)
         else:
-            st.info("A aba 'Controle_Custos' está vazia ou não pôde ser lida corretamente.")
+            st.info("A aba 'Controle_Custos' está vazia ou não pôde ser lida corretamente no Google Sheets.")
 
 # --- ABA 4: EDITAR REGISTRO ---
 elif opcao == "✏️ Editar Registro Existente":
@@ -232,7 +208,7 @@ elif opcao == "➕ Adicionar Novo Registro":
     if not st.session_state.get("admin_autenticado", False):
         st.error("Acesso restrito.")
     else:
-        st.subheader("➕ Adicionar Novo Registro")
+        st.subheader("➕ Novo Registro")
         with st.form("f_novo"):
             dest = st.text_input("Destinatário")
             rua = st.text_input("Rua")

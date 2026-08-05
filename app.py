@@ -1,3 +1,4 @@
+from folium.plugins import MarkerCluster  # <-- Adicione esta linha no topo do arquivo
 import logging
 import re
 import gspread

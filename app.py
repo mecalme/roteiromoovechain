@@ -201,69 +201,7 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
             except Exception as e:
                 st.error(f"Erro ao adicionar registo: {e}")
 
-elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:
-    st.title("📋 Tabela de Dados e Ações (Filtros e Edição Múltipla)")
-    
-    if df_dados.empty:
-        st.warning("Nenhum dado encontrado na tabela principal.")
-    else:
-        st.info("💡 Você pode editar as células diretamente na tabela abaixo ou utilizar os filtros laterais. Lembre-se de clicar no botão de salvar para confirmar as alterações.")
-        
-        # Filtros rápidos na interface
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            status_filtro = st.multiselect(
-                "Filtrar por Status:", 
-                options=df_dados["Status"].unique() if "Status" in df_dados.columns else [],
-                default=df_dados["Status"].unique() if "Status" in df_dados.columns else []
-            )
-        with col_f2:
-            pesquisa = st.text_input("🔍 Pesquisar por Destinatário ou Bairro:")
-            
-        # Aplicar filtros
-        df_filtrado = df_dados.copy()
-        if status_filtro and "Status" in df_filtrado.columns:
-            df_filtrado = df_filtrado[df_filtrado["Status"].isin(status_filtro)]
-        if pesquisa:
-            mask = df_filtrado.astype(str).apply(lambda x: x.str.contains(pesquisa, case=False, na=False)).any(axis=1)
-            df_filtrado = df_filtrado[mask]
-            
-        with st.form("form_edicao_multipla"):
-            # Tabela interativa com suporte a edição e seleção
-            df_editado = st.data_editor(
-                df_filtrado,
-                use_container_width=True,
-                num_rows="dynamic",
-                key="editor_tabela_dados"
-            )
-            
-            col_b1, col_b2 = st.columns([1, 4])
-            with col_b1:
-                salvar_alteracoes = st.form_submit_button("💾 Salvar Alterações", type="primary")
-                
-            if salvar_alteracoes:
-                try:
-                    # Lógica de conexão e salvamento no Google Sheets
-                    credentials_dict = dict(st.secrets["gcp_service_account"])
-                    creds = Credentials.from_service_account_info(
-                        credentials_dict, 
-                        scopes=[
-                            "https://www.googleapis.com/auth/spreadsheets",
-                            "https://www.googleapis.com/auth/drive"
-                        ]
-                    )
-                    client = gspread.authorize(creds)
-                    spreadsheet = client.open("Roteiro MooveChain Florianóplis 2026")
-                    worksheet = spreadsheet.sheet1 # Ou o nome correto da aba de dados
-                    
-                    # Atualiza a planilha com os dados modificados
-                    worksheet.clear()
-                    worksheet.update([df_editado.columns.values.tolist()] + df_editado.values.tolist())
-                    
-                    st.success("✅ Alterações salvas com sucesso na planilha!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Erro ao salvar os dados: {e}")
+
 
 elif opcao == "🛠️ Manutenção e Limpeza de Coordenadas" and st.session_state["autenticado"]:
     st.title("🛠️ Manutenção e Limpeza de Coordenadas")

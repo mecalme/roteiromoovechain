@@ -76,10 +76,8 @@ df_dados, df_custos, worksheet_principal = carregar_dados()
 st.sidebar.title("🚚 Roteiro MooveChain")
 st.sidebar.markdown("---")
 
-# Opções do menu base
 menu_opcoes = ["📊 Dashboard", "🗺️ Mapa e Rotas"]
 
-# Adiciona opções restritas se autenticado
 if st.session_state["autenticado"]:
     menu_opcoes.extend([
         "➕ Adicionar Novo Registro",
@@ -119,7 +117,6 @@ if opcao == "📊 Dashboard":
 
     if not df_dados.empty and "Status" in df_dados.columns:
         total_auditorias = len(df_dados)
-        # Limpeza e contagem insensível a maiúsculas/minúsculas
         df_dados["Status_Clean"] = df_dados["Status"].astype(
             str).str.strip().str.capitalize()
 
@@ -128,8 +125,6 @@ if opcao == "📊 Dashboard":
             df_dados[df_dados["Status_Clean"].str.contains("Justificad")])
         canceladas = len(
             df_dados[df_dados["Status_Clean"].str.contains("Cancelad")])
-        auditadas = len(
-            df_dados[df_dados["Status_Clean"].str.contains("Auditado")])
 
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Total de Auditorias", total_auditorias)
@@ -139,7 +134,6 @@ if opcao == "📊 Dashboard":
 
         st.markdown("---")
 
-        # Gráfico por Bairro e Status
         if "Bairro" in df_dados.columns:
             st.subheader(
                 "📍 Volume por Bairro detalhado por Status (Auditado, Justificado, Cancelado, Pendente)")
@@ -155,8 +149,7 @@ if opcao == "📊 Dashboard":
             )
             st.plotly_chart(fig_bairro_status, use_container_width=True)
     else:
-        st.info(
-            "Nenhum dado de auditoria disponível ou coluna 'Status' ausente.")
+        st.info("Nenhum dado de auditoria disponível.")
 
 elif opcao == "🗺️ Mapa e Rotas":
     st.title("🗺️ Mapa Interativo de Auditorias")
@@ -179,7 +172,7 @@ elif opcao == "🗺️ Mapa e Rotas":
                 continue
         st_folium(m, width=1200, height=550)
     else:
-        st.warning("Coordenadas geográficas insuficientes para renderizar o mapa.")
+        st.warning("Coordenadas geográficas insuficientes.")
 
 elif opcao == "➕ Adicionar Novo Registro":
     if st.session_state.get("autenticado", False):
@@ -208,49 +201,78 @@ elif opcao == "➕ Adicionar Novo Registro":
                 st.success("Registro adicionado com sucesso!")
                 st.rerun()
     else:
-        st.warning("Acesso restrito. Insira a palavra-passe de administrador na barra lateral.")
+        st.warning("Acesso restrito.")
 
 elif opcao == "📋 Tabela de Dados e Ações":
     if st.session_state.get("autenticado", False):
-        st.title("📋 Tabela de Dados e Ações com Edição Múltipla")
-        st.write("Selecione as linhas que deseja alterar utilizando as caixas de seleção e clique em editar.")
+        st.title("📋 Tabela de Dados e Ações com Filtros e Edição Múltipla")
 
         if not df_dados.empty:
-            # Adiciona coluna de seleção (checkbox) interativa na tabela
-            df_exibicao = df_dados.copy()
-            df_exibicao.insert(0, "Selecionar", False)
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("🔍 Filtros Persistentes")
+
+            # Filtros Persistentes
+            estados_disponiveis = [
+                "Todos"] + list(df_dados["Estado"].unique()) if "Estado" in df_dados.columns else ["Todos"]
+            filtro_estado = st.sidebar.selectbox("Filtrar por Estado", estados_disponiveis)
+
+            cidades_disponiveis = [
+                "Todas"] + list(df_dados["Cidade"].unique()) if "Cidade" in df_dados.columns else ["Todas"]
+            filtro_cidade = st.sidebar.selectbox("Filtrar por Cidade", cidades_disponiveis)
+
+            bairros_disponiveis = [
+                "Todos"] + list(df_dados["Bairro"].unique()) if "Bairro" in df_dados.columns else ["Todos"]
+            filtro_bairro = st.sidebar.selectbox("Filtrar por Bairro", bairros_disponiveis)
+
+            status_disponiveis = [
+                "Todos"] + list(df_dados["Status"].unique()) if "Status" in df_dados.columns else ["Todos"]
+            filtro_status = st.sidebar.selectbox("Filtrar por Status", status_disponiveis)
+
+            # Aplicar filtros ao dataframe
+            df_filtrado = df_dados.copy()
+            if filtro_estado != "Todos":
+                df_filtrado = df_filtrado[df_filtrado["Estado"] == filtro_estado]
+            if filtro_cidade != "Todas":
+                df_filtrado = df_filtrado[df_filtrado["Cidade"] == filtro_cidade]
+            if filtro_bairro != "Todos":
+                df_filtrado = df_filtrado[df_filtrado["Bairro"] == filtro_bairro]
+            if filtro_status != "Todos":
+                df_filtrado = df_filtrado[df_filtrado["Status"] == filtro_status]
+
+            st.write(f"A exibir **{len(df_filtrado)}** registros filtrados:")
+
+            # Coluna de seleção (checkbox)
+            df_filtrado.insert(0, "Selecionar", False)
 
             df_editado = st.data_editor(
-                df_exibicao,
+                df_filtrado,
                 column_config={
                     "Selecionar": st.column_config.CheckboxColumn("Selecionar", required=True)
                 },
-                disabled=[c for c in df_exibicao.columns if c != "Selecionar" and c !=
+                disabled=[c for c in df_filtrado.columns if c != "Selecionar" and c !=
                           "Status" and c != "Destinatário" and c != "Bairro"],
                 hide_index=True,
                 key="tabela_edicao_multipla"
             )
 
-            # Identificar linhas selecionadas
+            # Registros selecionados
             selecionados = df_editado[df_editado["Selecionar"] == True]
 
             if not selecionados.empty:
                 st.markdown("---")
                 st.subheader(
-                    f"✏️ Painel de Edição (Registros selecionados: {len(selecionados)})")
+                    f"✏️ Painel de Edição Múltipla (Selecionados: {len(selecionados)})")
 
                 with st.form("form_edicao_multipla"):
                     novo_status_lote = st.selectbox(
-                        "Alterar Status para os selecionados:",
+                        "Novo Status para os itens selecionados:",
                         ["Pendente", "Auditado", "Justificada", "Cancelada"]
                     )
                     btn_aplicar_lote = st.form_submit_button(
                         "💾 Gravar Alterações Múltiplas")
 
                     if btn_aplicar_lote and worksheet_principal:
-                        # Atualiza no Google Sheets com base no índice original das linhas
                         for idx in selecionados.index:
-                            # Linha na planilha do Google Sheets (considerando o cabeçalho na linha 1)
                             row_sheet = int(idx) + 2
                             col_status_idx = df_dados.columns.get_loc(
                                 "Status") + 1
@@ -262,17 +284,15 @@ elif opcao == "📋 Tabela de Dados e Ações":
                             "Alterações gravadas com sucesso no Google Sheets!")
                         st.rerun()
         else:
-            st.info("Não existem dados disponíveis para gerir.")
+            st.info("Não existem dados disponíveis.")
     else:
-        st.warning("Acesso restrito. Insira a palavra-passe de administrador na barra lateral.")
+        st.warning("Acesso restrito.")
 
 elif opcao == "🛠️ Manutenção e Limpeza de Coordenadas":
     if st.session_state.get("autenticado", False):
         st.title("🛠️ Manutenção e Limpeza de Coordenadas")
-        st.write(
-            "Ferramentas de suporte geográfico, limpeza e validação de moradas.")
     else:
-        st.warning("Acesso restrito. Insira a palavra-passe de administrador na barra lateral.")
+        st.warning("Acesso restrito.")
 
 elif opcao == "💰 Custos Logísticos":
     if st.session_state.get("autenticado", False):
@@ -284,7 +304,6 @@ elif opcao == "💰 Custos Logísticos":
                     df_custos, names="Categoria", values="Valor", title="Distribuição de Custos Logísticos")
                 st.plotly_chart(fig_custos, use_container_width=True)
         else:
-            st.info(
-                "Nenhum registo encontrado na aba 'Controle_Custos' do Google Sheets.")
+            st.info("Nenhum registo encontrado na aba 'Controle_Custos'.")
     else:
-        st.warning("Acesso restrito. Insira a palavra-passe de administrador na barra lateral.")
+        st.warning("Acesso restrito.")

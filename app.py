@@ -204,79 +204,66 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
 elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:
     st.title("📋 Tabela de Dados e Ações (Filtros e Edição Múltipla)")
     
-    if not df_dados.empty:
-        # Filtros Persistentes
-        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+    if df_dados.empty:
+        st.warning("Nenhum dado encontrado na tabela principal.")
+    else:
+        st.info("💡 Você pode editar as células diretamente na tabela abaixo ou utilizar os filtros laterais. Lembre-se de clicar no botão de salvar para confirmar as alterações.")
+        
+        # Filtros rápidos na interface
+        col_f1, col_f2 = st.columns(2)
         with col_f1:
-            estados_disp = ["Todos"] + list(df_dados["Estado"].dropna().unique()) if "Estado" in df_dados.columns else ["Todos"]
-            filtro_estado = st.selectbox("Estado", estados_disp)
+            status_filtro = st.multiselect(
+                "Filtrar por Status:", 
+                options=df_dados["Status"].unique() if "Status" in df_dados.columns else [],
+                default=df_dados["Status"].unique() if "Status" in df_dados.columns else []
+            )
         with col_f2:
-            cidades_disp = ["Todas"] + list(df_dados["Cidade"].dropna().unique()) if "Cidade" in df_dados.columns else ["Todas"]
-            filtro_cidade = st.selectbox("Cidade", cidades_disp)
-        with col_f3:
-            bairros_disp = ["Todos"] + list(df_dados["Bairro"].dropna().unique()) if "Bairro" in df_dados.columns else ["Todos"]
-            filtro_bairro = st.selectbox("Bairro", bairros_disp)
-        with col_f4:
-            status_disp = ["Todos"] + list(df_dados["Status"].dropna().unique()) if "Status" in df_dados.columns else ["Todos"]
-            filtro_status = st.selectbox("Status", status_disp)
+            pesquisa = st.text_input("🔍 Pesquisar por Destinatário ou Bairro:")
             
+        # Aplicar filtros
         df_filtrado = df_dados.copy()
-        if filtro_estado != "Todos":
-            df_filtrado = df_filtrado[df_filtrado["Estado"] == filtro_estado]
-        if filtro_cidade != "Todas":
-            df_filtrado = df_filtrado[df_filtrado["Cidade"] == filtro_cidade]
-        if filtro_bairro != "Todos":
-            df_filtrado = df_filtrado[df_filtrado["Bairro"] == filtro_bairro]
-        if filtro_status != "Todos":
-            df_filtrado = df_filtrado[df_filtrado["Status"] == filtro_status]
+        if status_filtro and "Status" in df_filtrado.columns:
+            df_filtrado = df_filtrado[df_filtrado["Status"].isin(status_filtro)]
+        if pesquisa:
+            mask = df_filtrado.astype(str).apply(lambda x: x.str.contains(pesquisa, case=False, na=False)).any(axis=1)
+            df_filtrado = df_filtrado[mask]
             
-        st.write(f"A exibir {len(df_filtrado)} registros filtrados:")
-        
-        # Inserção de coluna de seleção para edição múltipla
-        df_filtrado["Selecionar"] = False
-        df_editado = st.data_editor(
-            df_filtrado,
-            use_container_width=True,
-            num_rows="fixed",
-            key="tabela_edicao_multipla"
-        )
-        
-        # Painel de Ação de Edição Múltipla
-        linhas_selecionadas = df_editado[df_editado["Selecionar"] == True]
-        
-        if not linhas_selecionadas.empty:
-            st.markdown("---")
-            st.subheader("✏️ Painel de Edição Múltipla")
-            st.info(f"{len(linhas_selecionadas)} linha(s) selecionada(s) para alteração em lote.")
+        with st.form("form_edicao_multipla"):
+            # Tabela interativa com suporte a edição e seleção
+            df_editado = st.data_editor(
+                df_filtrado,
+                use_container_width=True,
+                num_rows="dynamic",
+                key="editor_tabela_dados"
+            )
             
-            novo_status_lote = st.selectbox("Novo Status para Selecionados", ["Auditado", "Pendente", "Justificada", "Cancelada"])
-            
-            if st.button("💾 Gravar Alterações na Planilha"):
+            col_b1, col_b2 = st.columns([1, 4])
+            with col_b1:
+                salvar_alteracoes = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                
+            if salvar_alteracoes:
                 try:
+                    # Lógica de conexão e salvamento no Google Sheets
                     credentials_dict = dict(st.secrets["gcp_service_account"])
                     creds = Credentials.from_service_account_info(
-                        credentials_dict,
-                        scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+                        credentials_dict, 
+                        scopes=[
+                            "https://www.googleapis.com/auth/spreadsheets",
+                            "https://www.googleapis.com/auth/drive"
+                        ]
                     )
                     client = gspread.authorize(creds)
                     spreadsheet = client.open("Roteiro MooveChain Florianóplis 2026")
-                    worksheet_principal = spreadsheet.sheet1
+                    worksheet = spreadsheet.sheet1 # Ou o nome correto da aba de dados
                     
-                    header = worksheet_principal.row_values(1)
-                    col_status_idx = header.index("Status") + 1 if "Status" in header else 9
+                    # Atualiza a planilha com os dados modificados
+                    worksheet.clear()
+                    worksheet.update([df_editado.columns.values.tolist()] + df_editado.values.tolist())
                     
-                    # Atualiza cada linha selecionada com base no índice original do dataframe
-                    for idx in linhas_selecionadas.index:
-                        row_sheet = int(idx) + 2  # 1 do cabeçalho + 1 do index Python 0-based
-                        worksheet_principal.update_cell(row_sheet, col_status_idx, novo_status_lote)
-                        
-                    st.success("✅ Alterações gravadas com sucesso no Google Sheets!")
-                    st.cache_data.clear()
+                    st.success("✅ Alterações salvas com sucesso na planilha!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Erro ao atualizar o Google Sheets: {e}")
-    else:
-        st.info("Nenhum dado disponível na tabela.")
+                    st.error(f"❌ Erro ao salvar os dados: {e}")
 
 elif opcao == "🛠️ Manutenção e Limpeza de Coordenadas" and st.session_state["autenticado"]:
     st.title("🛠️ Manutenção e Limpeza de Coordenadas")

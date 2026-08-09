@@ -99,7 +99,6 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.subheader("Navegação")
 
-# Definição das opções do menu lateral fixo
 opcoes_publicas = ["📊 Dashboard Principal", "🗺️ Mapa Interativo"]
 opcoes_admin = [
     "➕ Adicionar Novo Registro",
@@ -121,7 +120,6 @@ if opcao == "📊 Dashboard Principal":
     st.title("📊 Dashboard - Roteiro MooveChain Florianópolis 2026 (Versão 3)")
     
     if not df_dados.empty:
-        # Tratamento seguro da coluna Status
         if "Status" in df_dados.columns:
             total_auditorias = len(df_dados)
             pendentes = len(df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)])
@@ -132,7 +130,6 @@ if opcao == "📊 Dashboard Principal":
             total_auditorias = len(df_dados)
             pendentes, justificadas, canceladas, auditadas = 0, 0, 0, 0
 
-        # Métricas no topo
         col1, col2, col3, col4, col5 = st.columns(5)
         col1.metric("Total de Auditorias", total_auditorias)
         col2.metric("Auditadas", auditadas)
@@ -142,7 +139,6 @@ if opcao == "📊 Dashboard Principal":
         
         st.markdown("---")
         
-        # Gráfico por Bairro detalhado por Status
         st.subheader("📍 Volume por Bairro detalhado por Status")
         if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
             df_bairro_status = df_dados.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
@@ -213,7 +209,7 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
 
 elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:
     st.title("📋 Tabela de Dados e Ações")
-    st.write("Gerencie, visualize e edite os registros de auditoria utilizando os filtros abaixo:")
+    st.write("Filtre, selecione linhas através das caixas de seleção e abra o painel de edição abaixo:")
     
     if not df_dados.empty:
         # --- FILTROS PERSISTENTES ---
@@ -234,7 +230,6 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
         with f_col4:
             st.session_state["filtro_status"] = st.multiselect("Status", status_disponiveis, default=st.session_state["filtro_status"])
             
-        # Aplicação dos filtros sobre uma cópia dos dados
         df_filtrado = df_dados.copy()
         if st.session_state["filtro_estado"] and "Estado" in df_filtrado.columns:
             df_filtrado = df_filtrado[df_filtrado["Estado"].isin(st.session_state["filtro_estado"])]
@@ -247,46 +242,68 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
 
         st.markdown("---")
         
-        # Insere a coluna de checkboxes de seleção na tabela filtrada
+        # Insere coluna de selecção
         if "Selecionar" not in df_filtrado.columns:
             df_filtrado.insert(0, "Selecionar", False)
             
-        edited_df = st.data_editor(
+        tabela_selecao = st.data_editor(
             df_filtrado, 
             use_container_width=True, 
-            key="tabela_edicao_dados_v3",
+            key="tabela_selecao_v3",
             column_config={
                 "Selecionar": st.column_config.CheckboxColumn(
                     "Selecionar",
-                    help="Marque para selecionar linhas",
+                    help="Marque as linhas que deseja editar",
                     default=False,
                 )
-            }
+            },
+            disabled=[col for col in df_filtrado.columns if col != "Selecionar"]
         )
         
-        if st.button("Guardar Alterações na Planilha"):
-            try:
-                credentials_dict = dict(st.secrets["gcp_service_account"])
-                creds = Credentials.from_service_account_info(
-                    credentials_dict,
-                    scopes=[
-                        "https://www.googleapis.com/auth/spreadsheets",
-                        "https://www.googleapis.com/auth/drive"
-                    ]
-                )
-                client = gspread.authorize(creds)
-                sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
-                
-                df_para_salvar = edited_df.drop(columns=["Selecionar"], errors="ignore")
-                
-                sheet.clear()
-                sheet.update([df_para_salvar.columns.values.tolist()] + df_para_salvar.values.tolist())
-                
-                st.success("Dados atualizados com sucesso no Google Sheets!")
-                st.cache_data.clear()
-                st.rerun()
-            except Exception as e:
-                st.error(f"Erro ao atualizar dados na planilha: {e}")
+        # Identifica quais linhas foram selecionadas
+        linhas_selecionadas_indices = tabela_selecao[tabela_selecao["Selecionar"] == True].index
+        
+        if len(linhas_selecionadas_indices) > 0:
+            st.markdown("---")
+            st.subheader(f"✏️ Painel de Edição ({len(linhas_selecionadas_indices)} linha(s) selecionada(s))")
+            st.write("Edite os dados selecionados abaixo e clique em guardar:")
+            
+            # Extrai apenas as linhas marcadas (removendo a coluna temporária 'Selecionar')
+            df_para_editar = df_dados.loc[linhas_selecionadas_indices].copy()
+            
+            edited_panel = st.data_editor(
+                df_para_editar,
+                use_container_width=True,
+                key="painel_edicao_ativo"
+            )
+            
+            if st.button("Guardar Alterações na Planilha"):
+                try:
+                    credentials_dict = dict(st.secrets["gcp_service_account"])
+                    creds = Credentials.from_service_account_info(
+                        credentials_dict,
+                        scopes=[
+                            "https://www.googleapis.com/auth/spreadsheets",
+                            "https://www.googleapis.com/auth/drive"
+                        ]
+                    )
+                    client = gspread.authorize(creds)
+                    sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
+                    
+                    # Atualiza o dataframe original com as modificações feitas no painel de edição
+                    df_atualizado_geral = df_dados.copy()
+                    df_atualizado_geral.loc[linhas_selecionadas_indices] = edited_panel
+                    
+                    sheet.clear()
+                    sheet.update([df_atualizado_geral.columns.values.tolist()] + df_atualizado_geral.values.tolist())
+                    
+                    st.success("Dados alterados e guardados com sucesso no Google Sheets!")
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao atualizar dados na planilha: {e}")
+        else:
+            st.info("ℹ️ Selecione pelo menos uma linha na tabela acima com o 'checkbox' para habilitar o Painel de Edição.")
     else:
         st.info("Nenhum dado disponível na tabela principal.")
 

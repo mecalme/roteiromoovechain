@@ -268,7 +268,7 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
             st.subheader(f"✏️ Painel de Edição ({len(linhas_selecionadas_indices)} linha(s) selecionada(s))")
             st.write("Edite os dados selecionados abaixo e clique em guardar:")
             
-            # Extrai apenas as linhas marcadas (removendo a coluna temporária 'Selecionar')
+            # Extrai apenas as linhas marcadas
             df_para_editar = df_dados.loc[linhas_selecionadas_indices].copy()
             
             edited_panel = st.data_editor(
@@ -290,12 +290,30 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
                     client = gspread.authorize(creds)
                     sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
                     
-                    # Atualiza o dataframe original com as modificações feitas no painel de edição
-                    df_atualizado_geral = df_dados.copy()
-                    df_atualizado_geral.loc[linhas_selecionadas_indices] = edited_panel
+                    # Recupera o cabeçalho real da planilha do Google Sheets
+                    cabecalhos_planilha = sheet.row_values(1)
                     
-                    sheet.clear()
-                    sheet.update([df_atualizado_geral.columns.values.tolist()] + df_atualizado_geral.values.tolist())
+                    # Atualiza cirurgicamente apenas as linhas alteradas (sem apagar a planilha)
+                    for idx in linhas_selecionadas_indices:
+                        # O índice do DataFrame + 2 corresponde à linha exata no Google Sheets (considerando cabeçalho)
+                        linha_planilha = idx + 2
+                        
+                        # Pega os valores editados daquela linha
+                        linha_editada = edited_panel.loc[idx]
+                        
+                        # Monta a lista alinhada exatamente com as colunas da planilha do Google Sheets
+                        valores_linha = []
+                        for col in cabecalhos_planilha:
+                            if col in linha_editada:
+                                val = linha_editada[col]
+                                valores_linha.append(str(val) if pd.notna(val) else "")
+                            else:
+                                valores_linha.append("")
+                        
+                        # Atualiza a linha específica via intervalo (ex: A5:L5)
+                        num_colunas = len(valores_linha)
+                        range_celulas = gspread.utils.rowcol_to_a1(linha_planilha, 1) + ":" + gspread.utils.rowcol_to_a1(linha_planilha, num_colunas)
+                        sheet.update(range_celulas, [valores_linha])
                     
                     st.success("Dados alterados e guardados com sucesso no Google Sheets!")
                     st.cache_data.clear()

@@ -108,7 +108,7 @@ opcao = st.sidebar.radio("Ir para:", lista_menu)
 # --- 5. LÓGICA DAS SECÇÕES DA APLICAÇÃO ---
 
 if opcao == "📊 Dashboard Principal":
-    st.title("📊 Dashboard - Roteiro MooveChain Florianópolis 2026")
+    st.title("📊 Dashboard - Roteiro MooveChain Florianópolis 2026 (Versão 3)")
     
     if not df_dados.empty:
         # Tratamento seguro da coluna Status
@@ -206,7 +206,23 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
     st.write("Gerencie, visualize e edite os registros de auditoria diretamente abaixo:")
     
     if not df_dados.empty:
-        edited_df = st.data_editor(df_dados, use_container_width=True, key="tabela_edicao_dados")
+        # Cria cópia e insere coluna de checkboxes para seleção/edição interativa
+        df_editavel = df_dados.copy()
+        if "Selecionar" not in df_editavel.columns:
+            df_editavel.insert(0, "Selecionar", False)
+            
+        edited_df = st.data_editor(
+            df_editavel, 
+            use_container_width=True, 
+            key="tabela_edicao_dados_v3",
+            column_config={
+                "Selecionar": st.column_config.CheckboxColumn(
+                    "Selecionar",
+                    help="Marque para selecionar linhas",
+                    default=False,
+                )
+            }
+        )
         
         if st.button("Guardar Alterações na Planilha"):
             try:
@@ -221,9 +237,11 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
                 client = gspread.authorize(creds)
                 sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
                 
-                # Limpa e atualiza toda a planilha com os dados editados
+                # Remove a coluna temporária "Selecionar" antes de enviar para o Google Sheets
+                df_para_salvar = edited_df.drop(columns=["Selecionar"])
+                
                 sheet.clear()
-                sheet.update([edited_df.columns.values.tolist()] + edited_df.values.tolist())
+                sheet.update([df_para_salvar.columns.values.tolist()] + df_para_salvar.values.tolist())
                 
                 st.success("Dados atualizados com sucesso no Google Sheets!")
                 st.cache_data.clear()

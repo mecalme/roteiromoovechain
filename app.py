@@ -158,19 +158,52 @@ elif opcao == "🗺️ Mapa Interativo":
     st.title("🗺️ Mapa Interativo de Auditorias")
     if not df_dados.empty and "Latitude" in df_dados.columns and "Longitude" in df_dados.columns:
         m = folium.Map(location=[-27.5954, -48.5480], zoom_start=12)
+        
+        # Cores customizadas baseadas no status para os marcadores
+        def get_color(status):
+            status_str = str(status).lower()
+            if "auditado" in status_str:
+                return "green"
+            elif "pendente" in status_str:
+                return "orange"
+            elif "justificad" in status_str:
+                return "blue"
+            elif "cancelad" in status_str:
+                return "red"
+            return "gray"
+
         for _, row in df_dados.iterrows():
             try:
-                lat = float(row["Latitude"])
-                lon = float(row["Longitude"])
-                dest = row.get("Destinatário", "Local")
+                lat_val = row["Latitude"]
+                lon_val = row["Longitude"]
+                
+                if pd.isna(lat_val) or pd.isna(lon_val) or str(lat_val).strip() == "" or str(lon_val).strip() == "":
+                    continue
+                    
+                lat = float(lat_val)
+                lon = float(lon_val)
+                
+                # Identifica dinamicamente o campo do nome/destinatário
+                dest = "Local"
+                for col_name in ["Destinatário", "Cliente", "Nome", "Empresa", "Local"]:
+                    if col_name in row and pd.notna(row[col_name]):
+                        dest = str(row[col_name])
+                        break
+                        
                 status = row.get("Status", "N/D")
+                bairro = row.get("Bairro", "N/D")
+                
+                popup_html = f"<b>{dest}</b><br>Bairro: {bairro}<br>Status: {status}"
+                
                 folium.Marker(
                     [lat, lon],
-                    popup=f"<b>{dest}</b><br>Status: {status}",
-                    tooltip=dest
+                    popup=folium.Popup(popup_html, max_width=300),
+                    tooltip=dest,
+                    icon=folium.Icon(color=get_color(status), icon="info-sign")
                 ).add_to(m)
-            except Exception:
+            except Exception as e:
                 continue
+                
         st_folium(m, width=1200, height=500)
     else:
         st.warning("Coordenadas não disponíveis para exibir o mapa.")
@@ -295,13 +328,9 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
                     
                     # Atualiza cirurgicamente apenas as linhas alteradas (sem apagar a planilha)
                     for idx in linhas_selecionadas_indices:
-                        # O índice do DataFrame + 2 corresponde à linha exata no Google Sheets (considerando cabeçalho)
                         linha_planilha = idx + 2
-                        
-                        # Pega os valores editados daquela linha
                         linha_editada = edited_panel.loc[idx]
                         
-                        # Monta a lista alinhada exatamente com as colunas da planilha do Google Sheets
                         valores_linha = []
                         for col in cabecalhos_planilha:
                             if col in linha_editada:
@@ -310,7 +339,6 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
                             else:
                                 valores_linha.append("")
                         
-                        # Atualiza a linha específica via intervalo (ex: A5:L5)
                         num_colunas = len(valores_linha)
                         range_celulas = gspread.utils.rowcol_to_a1(linha_planilha, 1) + ":" + gspread.utils.rowcol_to_a1(linha_planilha, num_colunas)
                         sheet.update(range_celulas, [valores_linha])

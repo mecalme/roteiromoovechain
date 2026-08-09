@@ -201,7 +201,37 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
             except Exception as e:
                 st.error(f"Erro ao adicionar registo: {e}")
 
-
+elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado"]:
+    st.title("📋 Tabela de Dados e Ações")
+    st.write("Gerencie, visualize e edite os registros de auditoria diretamente abaixo:")
+    
+    if not df_dados.empty:
+        edited_df = st.data_editor(df_dados, use_container_width=True, key="tabela_edicao_dados")
+        
+        if st.button("Guardar Alterações na Planilha"):
+            try:
+                credentials_dict = dict(st.secrets["gcp_service_account"])
+                creds = Credentials.from_service_account_info(
+                    credentials_dict,
+                    scopes=[
+                        "https://www.googleapis.com/auth/spreadsheets",
+                        "https://www.googleapis.com/auth/drive"
+                    ]
+                )
+                client = gspread.authorize(creds)
+                sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
+                
+                # Limpa e atualiza toda a planilha com os dados editados
+                sheet.clear()
+                sheet.update([edited_df.columns.values.tolist()] + edited_df.values.tolist())
+                
+                st.success("Dados atualizados com sucesso no Google Sheets!")
+                st.cache_data.clear()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao atualizar dados na planilha: {e}")
+    else:
+        st.info("Nenhum dado disponível na tabela principal.")
 
 elif opcao == "🛠️ Manutenção e Limpeza de Coordenadas" and st.session_state["autenticado"]:
     st.title("🛠️ Manutenção e Limpeza de Coordenadas")

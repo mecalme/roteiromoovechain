@@ -8,8 +8,9 @@ import streamlit as st
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 from google.oauth2.service_account import Credentials
-
+#==================================================================================================
 # --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILOS CSS ---
+#=================================================================================================
 st.set_page_config(
     page_title="Roteiro MooveChain Florianópolis 2026",
     page_icon="🚚",
@@ -27,7 +28,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+#====================================================
 # --- 2. INICIALIZAÇÃO DE ESTADOS NA SESSÃO ---
+#=====================================================
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
@@ -41,7 +44,9 @@ if "filtro_bairro" not in st.session_state:
 if "filtro_status" not in st.session_state:
     st.session_state["filtro_status"] = []
 
+#==================================================================================
 # --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS ROBUSTA ---
+#==================================================================================
 @st.cache_data(ttl=60)
 def carregar_dados():
     try:
@@ -76,7 +81,9 @@ def carregar_dados():
 
 df_dados, df_custos = carregar_dados()
 
+#==================================================================================
 # --- 4. BARRA LATERAL (MENU E AUTENTICAÇÃO) ---
+#==================================================================================
 st.sidebar.title("🚚 Painel MooveChain")
 
 # Gestão de Autenticação na barra lateral
@@ -114,10 +121,12 @@ else:
 
 opcao = st.sidebar.radio("Ir para:", lista_menu)
 
+#==================================================================================
 # --- 5. LÓGICA DAS SECÇÕES DA APLICAÇÃO ---
+#==================================================================================
 
 if opcao == "📊 Dashboard Principal":
-    st.title("📊 Dashboard - Roteiro MooveChain Florianópolis 2026 (Versão 3)")
+    st.title("📊 Dashboard - Roteiro MooveChain Florianópolis 2026")
     
     if not df_dados.empty:
         if "Status" in df_dados.columns:
@@ -165,11 +174,11 @@ elif opcao == "🗺️ Mapa Interativo":
             if "auditado" in status_str:
                 return "green"
             elif "pendente" in status_str:
-                return "orange"
-            elif "justificad" in status_str:
                 return "blue"
-            elif "cancelad" in status_str:
+            elif "justificado" in status_str:
                 return "red"
+            elif "cancelad" in status_str:
+                return "black"
             return "gray"
 
         for _, row in df_dados.iterrows():

@@ -127,7 +127,7 @@ opcao = st.sidebar.radio("Ir para:", lista_menu)
 # --- 5. LÓGICA DAS SECÇÕES DA APLICAÇÃO ---
 
 if opcao == "📊 Dashboard Principal":
-    st.title("📊 Auditoria de Roteiro")
+    st.title("📊 Dashboard Auditorias Moovechain - 2026")
     st.markdown("MooveChain · Florianópolis 2026 — Dados sincronizados diretamente do Google Sheets.")
     
     if not df_dados.empty:

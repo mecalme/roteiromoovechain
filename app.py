@@ -45,7 +45,6 @@ st.markdown("""
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
-# Inicialização de estados para persistência dos filtros
 if "filtro_estado" not in st.session_state:
     st.session_state["filtro_estado"] = []
 if "filtro_cidade" not in st.session_state:
@@ -128,26 +127,46 @@ opcao = st.sidebar.radio("Ir para:", lista_menu)
 # --- 5. LÓGICA DAS SECÇÕES DA APLICAÇÃO ---
 
 if opcao == "📊 Dashboard Principal":
-    st.title("📊 Dashboard Auditoria MooveChain - 2026")
+    st.title("📊 Auditoria de Roteiro")
     st.markdown("MooveChain · Florianópolis 2026 — Dados sincronizados diretamente do Google Sheets.")
     
     if not df_dados.empty:
-        if "Status" in df_dados.columns:
-            total_auditorias = len(df_dados)
-            pendentes = len(df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)])
-            justificadas = len(df_dados[df_dados["Status"].str.contains("Justificad", case=False, na=False)])
-            canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelad", case=False, na=False)])
-            auditadas = len(df_dados[df_dados["Status"].str.contains("Auditado", case=False, na=False)])
+        # --- Filtros Globais do Dashboard colocados no topo para governar TUDO ---
+        st.markdown("### 🔍 Filtros do Dashboard")
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            bairros_lista = ["Todos"] + sorted(df_dados["Bairro"].dropna().unique().tolist()) if "Bairro" in df_dados.columns else ["Todos"]
+            filtro_bairro_dash = st.selectbox("Filtrar por Bairro", bairros_lista, key="dash_bairro")
+        with col_f2:
+            status_lista = ["Todos", "Auditado", "Pendente", "Justificado", "Cancelada"]
+            filtro_status_dash = st.selectbox("Filtrar por Status", status_lista, key="dash_status")
+
+        # Aplicação dos filtros em cima da base de dados principal
+        df_dash_view = df_dados.copy()
+        if filtro_bairro_dash != "Todos" and "Bairro" in df_dash_view.columns:
+            df_dash_view = df_dash_view[df_dash_view["Bairro"] == filtro_bairro_dash]
+        if filtro_status_dash != "Todos" and "Status" in df_dash_view.columns:
+            df_dash_view = df_dash_view[df_dash_view["Status"].str.contains(filtro_status_dash, case=False, na=False)]
+
+        st.markdown("---")
+
+        # Métricas calculadas com base nos dados filtrados
+        if "Status" in df_dash_view.columns:
+            total_auditorias = len(df_dash_view)
+            pendentes = len(df_dash_view[df_dash_view["Status"].str.contains("Pendente", case=False, na=False)])
+            justificadas = len(df_dash_view[df_dash_view["Status"].str.contains("Justificad", case=False, na=False)])
+            canceladas = len(df_dash_view[df_dash_view["Status"].str.contains("Cancelad", case=False, na=False)])
+            auditadas = len(df_dash_view[df_dash_view["Status"].str.contains("Auditado", case=False, na=False)])
             
             progresso = int((auditadas / total_auditorias * 100)) if total_auditorias > 0 else 0
         else:
-            total_auditorias = len(df_dados)
+            total_auditorias = len(df_dash_view)
             pendentes, justificadas, canceladas, auditadas, progresso = 0, 0, 0, 0, 0
 
-        # --- Linha de KPIs Executivos com Cartões Claros e Legíveis ---
+        # --- Linha de KPIs Executivos ---
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Pontos Totais", total_auditorias)
-        col2.metric("Auditados", auditadas, f"{progresso}% do roteiro")
+        col1.metric("Pontos Filtrados", total_auditorias)
+        col2.metric("Auditados", auditadas, f"{progresso}% do conjunto")
         col3.metric("Pendentes", pendentes)
         col4.metric("Justificados", justificadas)
         
@@ -157,23 +176,6 @@ if opcao == "📊 Dashboard Principal":
         
         st.markdown("---")
 
-        # --- Filtros Rápidos Locais para o Dashboard ---
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            bairros_lista = ["Todos"] + sorted(df_dados["Bairro"].dropna().unique().tolist()) if "Bairro" in df_dados.columns else ["Todos"]
-            filtro_bairro_dash = st.selectbox("Filtrar por Bairro", bairros_lista)
-        with col_f2:
-            status_lista = ["Todos", "Auditado", "Pendente", "Justificado", "Cancelada"]
-            filtro_status_dash = st.selectbox("Filtrar por Status", status_lista)
-
-        df_dash_view = df_dados.copy()
-        if filtro_bairro_dash != "Todos" and "Bairro" in df_dash_view.columns:
-            df_dash_view = df_dash_view[df_dash_view["Bairro"] == filtro_bairro_dash]
-        if filtro_status_dash != "Todos" and "Status" in df_dash_view.columns:
-            df_dash_view = df_dash_view[df_dash_view["Status"].str.contains(filtro_status_dash, case=False, na=False)]
-
-        st.markdown("---")
-
         # --- Layout Principal: Gráfico e Ranking de Bairros ---
         col_left, col_right = st.columns([2, 1])
 
@@ -181,38 +183,41 @@ if opcao == "📊 Dashboard Principal":
             st.subheader("📍 Status por Bairro")
             if "Bairro" in df_dash_view.columns and "Status" in df_dash_view.columns:
                 df_bairro_status = df_dash_view.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
-                fig_bairro_status = px.bar(
-                    df_bairro_status,
-                    x="Bairro",
-                    y="Quantidade",
-                    color="Status",
-                    barmode="stack",
-                    color_discrete_map={
-                        "Auditado": "#22c55e",
-                        "Pendente": "#f59e0b",
-                        "Justificado": "#38bdf8",
-                        "Cancelada": "#ef4444"
-                    }
-                )
-                fig_bairro_status.update_layout(
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#f1f5f9"),
-                    xaxis_tickangle=-45,
-                    margin=dict(l=10, r=10, t=10, b=10)
-                )
-                st.plotly_chart(fig_bairro_status, use_container_width=True)
+                if not df_bairro_status.empty:
+                    fig_bairro_status = px.bar(
+                        df_bairro_status,
+                        x="Bairro",
+                        y="Quantidade",
+                        color="Status",
+                        barmode="stack",
+                        color_discrete_map={
+                            "Auditado": "#22c55e",
+                            "Pendente": "#f59e0b",
+                            "Justificado": "#38bdf8",
+                            "Cancelada": "#ef4444"
+                        }
+                    )
+                    fig_bairro_status.update_layout(
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#f1f5f9"),
+                        xaxis_tickangle=-45,
+                        margin=dict(l=10, r=10, t=10, b=10)
+                    )
+                    st.plotly_chart(fig_bairro_status, use_container_width=True)
+                else:
+                    st.info("Sem dados para exibir no gráfico com os filtros atuais.")
 
         with col_right:
             st.subheader("📋 Top Bairros com Pendências")
-            if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
-                df_pendentes = df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)]
+            if "Bairro" in df_dash_view.columns and "Status" in df_dash_view.columns:
+                df_pendentes = df_dash_view[df_dash_view["Status"].str.contains("Pendente", case=False, na=False)]
                 if not df_pendentes.empty:
                     top_pendencias = df_pendentes["Bairro"].value_counts().reset_index()
                     top_pendencias.columns = ["Bairro", "Pendências"]
                     st.dataframe(top_pendencias.head(6), use_container_width=True, hide_index=True)
                 else:
-                    st.success("Nenhum ponto pendente encontrado!")
+                    st.success("Nenhum ponto pendente nos critérios selecionados!")
 
         st.markdown("---")
         st.subheader("🔍 Visualização Rápida dos Registros Filtrados")

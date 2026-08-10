@@ -19,11 +19,23 @@ st.set_page_config(
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Estilo moderno customizado para aproximar do design de painéis executivos
+# Estilo profissional aprimorado: cartões claros para máxima legibilidade
 st.markdown("""
     <style>
     .main { background-color: #0f1117; color: #f1f5f9; }
-    .stMetric { background-color: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+    
+    /* Cartões de Métricas com fundo claro e alto contraste */
+    .stMetric { 
+        background-color: #ffffff !important; 
+        padding: 18px !important; 
+        border-radius: 12px !important; 
+        border: 1px solid #cbd5e1 !important; 
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2); 
+    }
+    .stMetric label { color: #475569 !important; font-weight: 600 !important; }
+    .stMetric [data-testid="stMetricValue"] { color: #0f172a !important; font-weight: 700 !important; }
+    .stMetric [data-testid="stMetricDelta"] { color: #16a34a !important; font-weight: 600 !important; }
+
     .stButton>button { border-radius: 8px; font-weight: bold; }
     div[data-testid="stExpander"] { background-color: #1e293b; border-radius: 12px; border: 1px solid #334155; }
     </style>
@@ -58,12 +70,10 @@ def carregar_dados():
         client = gspread.authorize(creds)
         spreadsheet = client.open("Roteiro MooveChain Florianóplis 2026")
         
-        # Carrega dados principais
         sheet_principal = spreadsheet.sheet1
         dados_principais = sheet_principal.get_all_records()
         df_dados = pd.DataFrame(dados_principais)
         
-        # Tenta carregar custos se existir a aba Controle_Custos
         try:
             sheet_custos = spreadsheet.worksheet("Controle_Custos")
             dados_custos = sheet_custos.get_all_records()
@@ -81,7 +91,6 @@ df_dados, df_custos = carregar_dados()
 # --- 4. BARRA LATERAL (MENU E AUTENTICAÇÃO) ---
 st.sidebar.title("🚚 Painel MooveChain")
 
-# Gestão de Autenticação na barra lateral
 if not st.session_state["autenticado"]:
     senha_digitada = st.sidebar.text_input("Palavra-passe Admin", type="password")
     senha_correta = st.secrets.get("ADMIN_PASSWORD", "moovechain2026")
@@ -123,7 +132,6 @@ if opcao == "📊 Dashboard Principal":
     st.markdown("MooveChain · Florianópolis 2026 — Dados sincronizados diretamente do Google Sheets.")
     
     if not df_dados.empty:
-        # Tratamento de colunas e métricas
         if "Status" in df_dados.columns:
             total_auditorias = len(df_dados)
             pendentes = len(df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)])
@@ -136,7 +144,7 @@ if opcao == "📊 Dashboard Principal":
             total_auditorias = len(df_dados)
             pendentes, justificadas, canceladas, auditadas, progresso = 0, 0, 0, 0, 0
 
-        # --- Linha de KPIs Executivos ---
+        # --- Linha de KPIs Executivos com Cartões Claros e Legíveis ---
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Pontos Totais", total_auditorias)
         col2.metric("Auditados", auditadas, f"{progresso}% do roteiro")
@@ -158,7 +166,6 @@ if opcao == "📊 Dashboard Principal":
             status_lista = ["Todos", "Auditado", "Pendente", "Justificado", "Cancelada"]
             filtro_status_dash = st.selectbox("Filtrar por Status", status_lista)
 
-        # Aplica filtros locais
         df_dash_view = df_dados.copy()
         if filtro_bairro_dash != "Todos" and "Bairro" in df_dash_view.columns:
             df_dash_view = df_dash_view[df_dash_view["Bairro"] == filtro_bairro_dash]
@@ -167,7 +174,7 @@ if opcao == "📊 Dashboard Principal":
 
         st.markdown("---")
 
-        # --- Layout Principal: Gráfico / Mini-Mapa e Ranking de Bairros ---
+        # --- Layout Principal: Gráfico e Ranking de Bairros ---
         col_left, col_right = st.columns([2, 1])
 
         with col_left:
@@ -207,11 +214,9 @@ if opcao == "📊 Dashboard Principal":
                 else:
                     st.success("Nenhum ponto pendente encontrado!")
 
-        # --- Tabela Resumida Integrada no Dashboard ---
         st.markdown("---")
         st.subheader("🔍 Visualização Rápida dos Registros Filtrados")
         
-        # Seleciona colunas principais para exibir de forma limpa
         colunas_exibir = [c for c in ["Destinatário", "Rua", "Bairro", "Status", "Data_Visita"] if c in df_dash_view.columns]
         if not colunas_exibir:
             colunas_exibir = df_dash_view.columns[:5]

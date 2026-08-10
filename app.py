@@ -127,7 +127,7 @@ opcao = st.sidebar.radio("Ir para:", lista_menu)
 # --- 5. LÓGICA DAS SECÇÕES DA APLICAÇÃO ---
 
 if opcao == "📊 Dashboard Principal":
-    st.title("📊 Dashboard Auditorias Moovechain - 2026")
+    st.title("📊 Auditoria de Roteiro")
     st.markdown("MooveChain · Florianópolis 2026 — Dados sincronizados diretamente do Google Sheets.")
     
     if not df_dados.empty:
@@ -143,18 +143,17 @@ if opcao == "📊 Dashboard Principal":
         with col_f2:
             filtro_status_dash = st.multiselect("Filtrar por Status", status_disponiveis, key="dash_status_multi")
 
-        # Aplicação dos filtros multiselect (se vazio, considera todos)
+        # Aplicação dos filtros multiselect
         df_dash_view = df_dados.copy()
         if filtro_bairro_dash and "Bairro" in df_dash_view.columns:
             df_dash_view = df_dash_view[df_dash_view["Bairro"].isin(filtro_bairro_dash)]
         if filtro_status_dash and "Status" in df_dash_view.columns:
-            # Filtro flexível para capturar variações parciais de status
             condicao_status = df_dash_view["Status"].apply(lambda s: any(st_val.lower() in str(s).lower() for st_val in filtro_status_dash))
             df_dash_view = df_dash_view[condicao_status]
 
         st.markdown("---")
 
-        # Métricas calculadas com base nos dados filtrados
+        # Métricas calculadas
         if "Status" in df_dash_view.columns:
             total_auditorias = len(df_dash_view)
             pendentes = len(df_dash_view[df_dash_view["Status"].str.contains("Pendente", case=False, na=False)])
@@ -180,7 +179,39 @@ if opcao == "📊 Dashboard Principal":
         
         st.markdown("---")
 
-        # --- Layout Principal: Gráfico e Ranking de Bairros ---
+        # --- Gráfico de Pizza (Percentual dos Status dos Cartões) ---
+        st.subheader("🥧 Distribuição Percentual dos Status")
+        if "Status" in df_dash_view.columns and not df_dash_view.empty:
+            df_status_counts = df_dash_view["Status"].value_counts().reset_index()
+            df_status_counts.columns = ["Status", "Quantidade"]
+            
+            fig_pizza = px.pie(
+                df_status_counts,
+                names="Status",
+                values="Quantidade",
+                hole=0.4, # Deixa estilo Donut chart, que fica muito elegante
+                color="Status",
+                color_discrete_map={
+                    "Auditado": "#22c55e",
+                    "Pendente": "#f59e0b",
+                    "Justificado": "#38bdf8",
+                    "Cancelada": "#ef4444"
+                }
+            )
+            fig_pizza.update_traces(textinfo="percent+label", textfont_size=14)
+            fig_pizza.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#f1f5f9"),
+                margin=dict(l=20, r=20, t=20, b=20)
+            )
+            st.plotly_chart(fig_pizza, use_container_width=True)
+        else:
+            st.info("Sem dados suficientes para gerar o gráfico de pizza.")
+
+        st.markdown("---")
+
+        # --- Layout Principal: Gráfico de Bairros e Ranking ---
         col_left, col_right = st.columns([2, 1])
 
         with col_left:

@@ -19,11 +19,13 @@ st.set_page_config(
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+# Estilo moderno customizado para aproximar do design de painéis executivos
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .main { background-color: #0f1117; color: #f1f5f9; }
+    .stMetric { background-color: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
     .stButton>button { border-radius: 8px; font-weight: bold; }
+    div[data-testid="stExpander"] { background-color: #1e293b; border-radius: 12px; border: 1px solid #334155; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -117,10 +119,11 @@ opcao = st.sidebar.radio("Ir para:", lista_menu)
 # --- 5. LÓGICA DAS SECÇÕES DA APLICAÇÃO ---
 
 if opcao == "📊 Dashboard Principal":
-    st.title("📊 Dashboard - Roteiro MooveChain Florianópolis 2026")
-    st.markdown("Visão geral em tempo real da auditoria e andamento dos roteiros.")
+    st.title("📊 Auditoria de Roteiro")
+    st.markdown("MooveChain · Florianópolis 2026 — Dados sincronizados diretamente do Google Sheets.")
     
     if not df_dados.empty:
+        # Tratamento de colunas e métricas
         if "Status" in df_dados.columns:
             total_auditorias = len(df_dados)
             pendentes = len(df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)])
@@ -128,77 +131,93 @@ if opcao == "📊 Dashboard Principal":
             canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelad", case=False, na=False)])
             auditadas = len(df_dados[df_dados["Status"].str.contains("Auditado", case=False, na=False)])
             
-            taxa_conclusao = (auditadas / total_auditorias * 100) if total_auditorias > 0 else 0
+            progresso = int((auditadas / total_auditorias * 100)) if total_auditorias > 0 else 0
         else:
             total_auditorias = len(df_dados)
-            pendentes, justificadas, canceladas, auditadas, taxa_conclusao = 0, 0, 0, 0, 0
+            pendentes, justificadas, canceladas, auditadas, progresso = 0, 0, 0, 0, 0
 
-        # Linha de KPIs Profissionais
-        col1, col2, col3, col4, col5 = st.columns(5)
+        # --- Linha de KPIs Executivos ---
+        col1, col2, col3, col4 = st.columns(4)
         col1.metric("Pontos Totais", total_auditorias)
-        col2.metric("Auditados", auditadas, f"{taxa_conclusao:.1f}% do roteiro")
+        col2.metric("Auditados", auditadas, f"{progresso}% do roteiro")
         col3.metric("Pendentes", pendentes)
         col4.metric("Justificados", justificadas)
-        col5.metric("Canceladas", canceladas)
+        
+        # --- Barra de Progresso Visual ---
+        st.markdown("### Progresso da Auditoria")
+        st.progress(progresso / 100, text=f"Conclusão: {progresso}%")
         
         st.markdown("---")
-        
-        # Grid visual com Gráficos Profissionais (Plotly)
-        col_graf1, col_graf2 = st.columns([2, 1])
-        
-        with col_graf1:
-            st.subheader("📍 Pontos por Bairro (Ordenado por Volume)")
-            if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
-                df_bairro_status = df_dados.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
-                
-                # Ordena os bairros pelo total de registros para o gráfico ficar limpo
-                ordem_bairros = df_dados["Bairro"].value_counts().index.tolist()
-                
+
+        # --- Filtros Rápidos Locais para o Dashboard ---
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            bairros_lista = ["Todos"] + sorted(df_dados["Bairro"].dropna().unique().tolist()) if "Bairro" in df_dados.columns else ["Todos"]
+            filtro_bairro_dash = st.selectbox("Filtrar por Bairro", bairros_lista)
+        with col_f2:
+            status_lista = ["Todos", "Auditado", "Pendente", "Justificado", "Cancelada"]
+            filtro_status_dash = st.selectbox("Filtrar por Status", status_lista)
+
+        # Aplica filtros locais
+        df_dash_view = df_dados.copy()
+        if filtro_bairro_dash != "Todos" and "Bairro" in df_dash_view.columns:
+            df_dash_view = df_dash_view[df_dash_view["Bairro"] == filtro_bairro_dash]
+        if filtro_status_dash != "Todos" and "Status" in df_dash_view.columns:
+            df_dash_view = df_dash_view[df_dash_view["Status"].str.contains(filtro_status_dash, case=False, na=False)]
+
+        st.markdown("---")
+
+        # --- Layout Principal: Gráfico / Mini-Mapa e Ranking de Bairros ---
+        col_left, col_right = st.columns([2, 1])
+
+        with col_left:
+            st.subheader("📍 Status por Bairro")
+            if "Bairro" in df_dash_view.columns and "Status" in df_dash_view.columns:
+                df_bairro_status = df_dash_view.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
                 fig_bairro_status = px.bar(
                     df_bairro_status,
                     x="Bairro",
                     y="Quantidade",
                     color="Status",
                     barmode="stack",
-                    category_orders={"Bairro": ordem_bairros},
                     color_discrete_map={
-                        "Auditado": "#2ecc71",
-                        "Pendente": "#f39c12",
-                        "Justificado": "#3498db",
-                        "Cancelada": "#e74c3c"
+                        "Auditado": "#22c55e",
+                        "Pendente": "#f59e0b",
+                        "Justificado": "#38bdf8",
+                        "Cancelada": "#ef4444"
                     }
                 )
                 fig_bairro_status.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(color="#f1f5f9"),
                     xaxis_tickangle=-45,
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    margin=dict(l=10, r=10, t=10, b=10)
                 )
                 st.plotly_chart(fig_bairro_status, use_container_width=True)
-                
-        with col_graf2:
-            st.subheader("📊 Distribuição de Status")
-            if "Status" in df_dados.columns:
-                df_status_counts = df_dados["Status"].value_counts().reset_index()
-                df_status_counts.columns = ["Status", "Quantidade"]
-                
-                fig_pie = px.pie(
-                    df_status_counts,
-                    names="Status",
-                    values="Quantidade",
-                    hole=0.4,
-                    color="Status",
-                    color_discrete_map={
-                        "Auditado": "#2ecc71",
-                        "Pendente": "#f39c12",
-                        "Justificado": "#3498db",
-                        "Cancelada": "#e74c3c"
-                    }
-                )
-                fig_pie.update_layout(
-                    margin=dict(l=10, r=10, t=10, b=10),
-                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
-                )
-                st.plotly_chart(fig_pie, use_container_width=True)
+
+        with col_right:
+            st.subheader("📋 Top Bairros com Pendências")
+            if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
+                df_pendentes = df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)]
+                if not df_pendentes.empty:
+                    top_pendencias = df_pendentes["Bairro"].value_counts().reset_index()
+                    top_pendencias.columns = ["Bairro", "Pendências"]
+                    st.dataframe(top_pendencias.head(6), use_container_width=True, hide_index=True)
+                else:
+                    st.success("Nenhum ponto pendente encontrado!")
+
+        # --- Tabela Resumida Integrada no Dashboard ---
+        st.markdown("---")
+        st.subheader("🔍 Visualização Rápida dos Registros Filtrados")
+        
+        # Seleciona colunas principais para exibir de forma limpa
+        colunas_exibir = [c for c in ["Destinatário", "Rua", "Bairro", "Status", "Data_Visita"] if c in df_dash_view.columns]
+        if not colunas_exibir:
+            colunas_exibir = df_dash_view.columns[:5]
+            
+        st.dataframe(df_dash_view[colunas_exibir], use_container_width=True, hide_index=True)
+
     else:
         st.info("A carregar dados do Google Sheets...")
 

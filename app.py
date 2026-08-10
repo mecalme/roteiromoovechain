@@ -8,9 +8,8 @@ import streamlit as st
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 from google.oauth2.service_account import Credentials
-#==================================================================================================
+
 # --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILOS CSS ---
-#=================================================================================================
 st.set_page_config(
     page_title="Roteiro MooveChain Florianópolis 2026",
     page_icon="🚚",
@@ -28,9 +27,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-#====================================================
 # --- 2. INICIALIZAÇÃO DE ESTADOS NA SESSÃO ---
-#=====================================================
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
@@ -44,9 +41,7 @@ if "filtro_bairro" not in st.session_state:
 if "filtro_status" not in st.session_state:
     st.session_state["filtro_status"] = []
 
-#==================================================================================
 # --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS ROBUSTA ---
-#==================================================================================
 @st.cache_data(ttl=60)
 def carregar_dados():
     try:
@@ -81,9 +76,7 @@ def carregar_dados():
 
 df_dados, df_custos = carregar_dados()
 
-#==================================================================================
 # --- 4. BARRA LATERAL (MENU E AUTENTICAÇÃO) ---
-#==================================================================================
 st.sidebar.title("🚚 Painel MooveChain")
 
 # Gestão de Autenticação na barra lateral
@@ -121,12 +114,11 @@ else:
 
 opcao = st.sidebar.radio("Ir para:", lista_menu)
 
-#==================================================================================
 # --- 5. LÓGICA DAS SECÇÕES DA APLICAÇÃO ---
-#==================================================================================
 
 if opcao == "📊 Dashboard Principal":
     st.title("📊 Dashboard - Roteiro MooveChain Florianópolis 2026")
+    st.markdown("Visão geral em tempo real da auditoria e andamento dos roteiros.")
     
     if not df_dados.empty:
         if "Status" in df_dados.columns:
@@ -135,31 +127,78 @@ if opcao == "📊 Dashboard Principal":
             justificadas = len(df_dados[df_dados["Status"].str.contains("Justificad", case=False, na=False)])
             canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelad", case=False, na=False)])
             auditadas = len(df_dados[df_dados["Status"].str.contains("Auditado", case=False, na=False)])
+            
+            taxa_conclusao = (auditadas / total_auditorias * 100) if total_auditorias > 0 else 0
         else:
             total_auditorias = len(df_dados)
-            pendentes, justificadas, canceladas, auditadas = 0, 0, 0, 0
+            pendentes, justificadas, canceladas, auditadas, taxa_conclusao = 0, 0, 0, 0, 0
 
+        # Linha de KPIs Profissionais
         col1, col2, col3, col4, col5 = st.columns(5)
-        col1.metric("Total de Auditorias", total_auditorias)
-        col2.metric("Auditadas", auditadas)
+        col1.metric("Pontos Totais", total_auditorias)
+        col2.metric("Auditados", auditadas, f"{taxa_conclusao:.1f}% do roteiro")
         col3.metric("Pendentes", pendentes)
-        col4.metric("Justificadas", justificadas)
+        col4.metric("Justificados", justificadas)
         col5.metric("Canceladas", canceladas)
         
         st.markdown("---")
         
-        st.subheader("📍 Volume por Bairro detalhado por Status")
-        if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
-            df_bairro_status = df_dados.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
-            fig_bairro_status = px.bar(
-                df_bairro_status,
-                x="Bairro",
-                y="Quantidade",
-                color="Status",
-                barmode="group",
-                title="Distribuição de Auditorias por Bairro e Status"
-            )
-            st.plotly_chart(fig_bairro_status, use_container_width=True)
+        # Grid visual com Gráficos Profissionais (Plotly)
+        col_graf1, col_graf2 = st.columns([2, 1])
+        
+        with col_graf1:
+            st.subheader("📍 Pontos por Bairro (Ordenado por Volume)")
+            if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
+                df_bairro_status = df_dados.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
+                
+                # Ordena os bairros pelo total de registros para o gráfico ficar limpo
+                ordem_bairros = df_dados["Bairro"].value_counts().index.tolist()
+                
+                fig_bairro_status = px.bar(
+                    df_bairro_status,
+                    x="Bairro",
+                    y="Quantidade",
+                    color="Status",
+                    barmode="stack",
+                    category_orders={"Bairro": ordem_bairros},
+                    color_discrete_map={
+                        "Auditado": "#2ecc71",
+                        "Pendente": "#f39c12",
+                        "Justificado": "#3498db",
+                        "Cancelada": "#e74c3c"
+                    }
+                )
+                fig_bairro_status.update_layout(
+                    xaxis_tickangle=-45,
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                )
+                st.plotly_chart(fig_bairro_status, use_container_width=True)
+                
+        with col_graf2:
+            st.subheader("📊 Distribuição de Status")
+            if "Status" in df_dados.columns:
+                df_status_counts = df_dados["Status"].value_counts().reset_index()
+                df_status_counts.columns = ["Status", "Quantidade"]
+                
+                fig_pie = px.pie(
+                    df_status_counts,
+                    names="Status",
+                    values="Quantidade",
+                    hole=0.4,
+                    color="Status",
+                    color_discrete_map={
+                        "Auditado": "#2ecc71",
+                        "Pendente": "#f39c12",
+                        "Justificado": "#3498db",
+                        "Cancelada": "#e74c3c"
+                    }
+                )
+                fig_pie.update_layout(
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
     else:
         st.info("A carregar dados do Google Sheets...")
 
@@ -168,17 +207,16 @@ elif opcao == "🗺️ Mapa Interativo":
     if not df_dados.empty and "Latitude" in df_dados.columns and "Longitude" in df_dados.columns:
         m = folium.Map(location=[-27.5954, -48.5480], zoom_start=12)
         
-        # Cores customizadas baseadas no status para os marcadores
         def get_color(status):
             status_str = str(status).lower()
             if "auditado" in status_str:
                 return "green"
             elif "pendente" in status_str:
+                return "orange"
+            elif "justificad" in status_str:
                 return "blue"
-            elif "justificado" in status_str:
-                return "red"
             elif "cancelad" in status_str:
-                return "black"
+                return "red"
             return "gray"
 
         for _, row in df_dados.iterrows():
@@ -192,7 +230,6 @@ elif opcao == "🗺️ Mapa Interativo":
                 lat = float(lat_val)
                 lon = float(lon_val)
                 
-                # Identifica dinamicamente o campo do nome/destinatário
                 dest = "Local"
                 for col_name in ["Destinatário", "Cliente", "Nome", "Empresa", "Local"]:
                     if col_name in row and pd.notna(row[col_name]):
@@ -210,7 +247,7 @@ elif opcao == "🗺️ Mapa Interativo":
                     tooltip=dest,
                     icon=folium.Icon(color=get_color(status), icon="info-sign")
                 ).add_to(m)
-            except Exception as e:
+            except Exception:
                 continue
                 
         st_folium(m, width=1200, height=500)
@@ -254,7 +291,6 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
     st.write("Filtre, selecione linhas através das caixas de seleção e abra o painel de edição abaixo:")
     
     if not df_dados.empty:
-        # --- FILTROS PERSISTENTES ---
         st.subheader("🔍 Filtros de Pesquisa")
         f_col1, f_col2, f_col3, f_col4 = st.columns(4)
         
@@ -284,7 +320,6 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
 
         st.markdown("---")
         
-        # Insere coluna de selecção
         if "Selecionar" not in df_filtrado.columns:
             df_filtrado.insert(0, "Selecionar", False)
             
@@ -302,7 +337,6 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
             disabled=[col for col in df_filtrado.columns if col != "Selecionar"]
         )
         
-        # Identifica quais linhas foram selecionadas
         linhas_selecionadas_indices = tabela_selecao[tabela_selecao["Selecionar"] == True].index
         
         if len(linhas_selecionadas_indices) > 0:
@@ -310,7 +344,6 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
             st.subheader(f"✏️ Painel de Edição ({len(linhas_selecionadas_indices)} linha(s) selecionada(s))")
             st.write("Edite os dados selecionados abaixo e clique em guardar:")
             
-            # Extrai apenas as linhas marcadas
             df_para_editar = df_dados.loc[linhas_selecionadas_indices].copy()
             
             edited_panel = st.data_editor(
@@ -332,10 +365,8 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
                     client = gspread.authorize(creds)
                     sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
                     
-                    # Recupera o cabeçalho real da planilha do Google Sheets
                     cabecalhos_planilha = sheet.row_values(1)
                     
-                    # Atualiza cirurgicamente apenas as linhas alteradas (sem apagar a planilha)
                     for idx in linhas_selecionadas_indices:
                         linha_planilha = idx + 2
                         linha_editada = edited_panel.loc[idx]

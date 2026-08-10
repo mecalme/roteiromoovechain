@@ -128,23 +128,32 @@ opcao = st.sidebar.radio("Ir para:", lista_menu)
 
 if opcao == "📊 Dashboard Principal":
     st.title("📊 Dashboard Auditorias Moovechain - 2026")
-    st.markdown("MooveChain · Florianópolis 2026 — Dados sincronizados diretamente do Google Sheets.")
     
     if not df_dados.empty:
-        # --- Filtros Globais do Dashboard em Multiselect ---
+        # --- Filtros Globais do Dashboard em Multiselect (Estado, Cidade, Bairro e Status) ---
         st.markdown("### 🔍 Filtros do Dashboard")
-        col_f1, col_f2 = st.columns(2)
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
         
+        estados_disponiveis = sorted(df_dados["Estado"].dropna().unique().tolist()) if "Estado" in df_dados.columns else []
+        cidades_disponiveis = sorted(df_dados["Cidade"].dropna().unique().tolist()) if "Cidade" in df_dados.columns else []
         bairros_disponiveis = sorted(df_dados["Bairro"].dropna().unique().tolist()) if "Bairro" in df_dados.columns else []
         status_disponiveis = sorted(df_dados["Status"].dropna().unique().tolist()) if "Status" in df_dados.columns else ["Auditado", "Pendente", "Justificado", "Cancelada"]
 
         with col_f1:
-            filtro_bairro_dash = st.multiselect("Filtrar por Bairro(s)", bairros_disponiveis, key="dash_bairro_multi")
+            filtro_estado_dash = st.multiselect("Filtrar por Estado", estados_disponiveis, key="dash_estado_multi")
         with col_f2:
+            filtro_cidade_dash = st.multiselect("Filtrar por Cidade", cidades_disponiveis, key="dash_cidade_multi")
+        with col_f3:
+            filtro_bairro_dash = st.multiselect("Filtrar por Bairro(s)", bairros_disponiveis, key="dash_bairro_multi")
+        with col_f4:
             filtro_status_dash = st.multiselect("Filtrar por Status", status_disponiveis, key="dash_status_multi")
 
-        # Aplicação dos filtros multiselect
+        # Aplicação dos filtros multiselect em cascata
         df_dash_view = df_dados.copy()
+        if filtro_estado_dash and "Estado" in df_dash_view.columns:
+            df_dash_view = df_dash_view[df_dash_view["Estado"].isin(filtro_estado_dash)]
+        if filtro_cidade_dash and "Cidade" in df_dash_view.columns:
+            df_dash_view = df_dash_view[df_dash_view["Cidade"].isin(filtro_cidade_dash)]
         if filtro_bairro_dash and "Bairro" in df_dash_view.columns:
             df_dash_view = df_dash_view[df_dash_view["Bairro"].isin(filtro_bairro_dash)]
         if filtro_status_dash and "Status" in df_dash_view.columns:
@@ -189,7 +198,7 @@ if opcao == "📊 Dashboard Principal":
                 df_status_counts,
                 names="Status",
                 values="Quantidade",
-                hole=0.4, # Deixa estilo Donut chart, que fica muito elegante
+                hole=0.4,
                 color="Status",
                 color_discrete_map={
                     "Auditado": "#22c55e",

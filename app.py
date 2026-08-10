@@ -131,22 +131,26 @@ if opcao == "📊 Dashboard Principal":
     st.markdown("MooveChain · Florianópolis 2026 — Dados sincronizados diretamente do Google Sheets.")
     
     if not df_dados.empty:
-        # --- Filtros Globais do Dashboard colocados no topo para governar TUDO ---
+        # --- Filtros Globais do Dashboard em Multiselect ---
         st.markdown("### 🔍 Filtros do Dashboard")
         col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            bairros_lista = ["Todos"] + sorted(df_dados["Bairro"].dropna().unique().tolist()) if "Bairro" in df_dados.columns else ["Todos"]
-            filtro_bairro_dash = st.selectbox("Filtrar por Bairro", bairros_lista, key="dash_bairro")
-        with col_f2:
-            status_lista = ["Todos", "Auditado", "Pendente", "Justificado", "Cancelada"]
-            filtro_status_dash = st.selectbox("Filtrar por Status", status_lista, key="dash_status")
+        
+        bairros_disponiveis = sorted(df_dados["Bairro"].dropna().unique().tolist()) if "Bairro" in df_dados.columns else []
+        status_disponiveis = sorted(df_dados["Status"].dropna().unique().tolist()) if "Status" in df_dados.columns else ["Auditado", "Pendente", "Justificado", "Cancelada"]
 
-        # Aplicação dos filtros em cima da base de dados principal
+        with col_f1:
+            filtro_bairro_dash = st.multiselect("Filtrar por Bairro(s)", bairros_disponiveis, key="dash_bairro_multi")
+        with col_f2:
+            filtro_status_dash = st.multiselect("Filtrar por Status", status_disponiveis, key="dash_status_multi")
+
+        # Aplicação dos filtros multiselect (se vazio, considera todos)
         df_dash_view = df_dados.copy()
-        if filtro_bairro_dash != "Todos" and "Bairro" in df_dash_view.columns:
-            df_dash_view = df_dash_view[df_dash_view["Bairro"] == filtro_bairro_dash]
-        if filtro_status_dash != "Todos" and "Status" in df_dash_view.columns:
-            df_dash_view = df_dash_view[df_dash_view["Status"].str.contains(filtro_status_dash, case=False, na=False)]
+        if filtro_bairro_dash and "Bairro" in df_dash_view.columns:
+            df_dash_view = df_dash_view[df_dash_view["Bairro"].isin(filtro_bairro_dash)]
+        if filtro_status_dash and "Status" in df_dash_view.columns:
+            # Filtro flexível para capturar variações parciais de status
+            condicao_status = df_dash_view["Status"].apply(lambda s: any(st_val.lower() in str(s).lower() for st_val in filtro_status_dash))
+            df_dash_view = df_dash_view[condicao_status]
 
         st.markdown("---")
 

@@ -45,6 +45,9 @@ st.markdown("""
 if "autenticado" not in st.session_state:
     st.session_state["autenticado"] = False
 
+if "versao_dados" not in st.session_state:
+    st.session_state["versao_dados"] = 0
+
 if "filtro_estado" not in st.session_state:
     st.session_state["filtro_estado"] = []
 if "filtro_cidade" not in st.session_state:
@@ -57,9 +60,9 @@ if "filtro_status" not in st.session_state:
 if "mensagem_sucesso" not in st.session_state:
     st.session_state["mensagem_sucesso"] = ""
 
-# --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS ROBUSTA ---
+# --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS COM CONTROLO DE VERSÃO ---
 @st.cache_data(ttl=60)
-def carregar_dados():
+def carregar_dados_cache(versao):
     try:
         credentials_dict = dict(st.secrets["gcp_service_account"])
         creds = Credentials.from_service_account_info(
@@ -76,12 +79,13 @@ def carregar_dados():
         dados_principais = sheet_principal.get_all_records()
         df_dados = pd.DataFrame(dados_principais)
             
-        return df_dados, pd.DataFrame()
+        return df_dados
     except Exception as e:
         st.error(f"Erro ao ligar ao Google Sheets: {e}")
-        return pd.DataFrame(), pd.DataFrame()
+        return pd.DataFrame()
 
-df_dados, _ = carregar_dados()
+# Passamos a versão atual da sessão para obrigar a recarregar se houver alteração
+df_dados = carregar_dados_cache(st.session_state["versao_dados"])
 
 # --- 4. BARRA LATERAL (MENU E AUTENTICAÇÃO) ---
 st.sidebar.title("🚚 Painel MooveChain")
@@ -129,11 +133,9 @@ if opcao == "📊 Dashboard Principal":
     st.title("📊 Dashboard Auditorias Moovechain - 2026")
     
     if not df_dados.empty:
-        # Converter coluna de data para datetime caso exista
         if "Data_Visita" in df_dados.columns:
             df_dados["Data_Visita"] = pd.to_datetime(df_dados["Data_Visita"], errors="coerce")
 
-        # --- Filtros Globais do Dashboard em Multiselect e Intervalo de Datas ---
         st.markdown("### 🔍 Filtros do Dashboard")
         col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns([1, 1, 1, 1, 1.5])
         
@@ -167,7 +169,6 @@ if opcao == "📊 Dashboard Principal":
                 intervalo_datas = None
                 st.info("Data indisponível.")
 
-        # Aplicação dos filtros em cascata (Multiselect + Intervalo de Datas com preservação de nulos)
         df_dash_view = df_dados.copy()
         if filtro_estado_dash and "Estado" in df_dash_view.columns:
             df_dash_view = df_dash_view[df_dash_view["Estado"].isin(filtro_estado_dash)]
@@ -189,7 +190,6 @@ if opcao == "📊 Dashboard Principal":
 
         st.markdown("---")
 
-        # Métricas calculadas
         if "Status" in df_dash_view.columns:
             total_auditorias = len(df_dash_view)
             pendentes = len(df_dash_view[df_dash_view["Status"].str.contains("Pendente", case=False, na=False)])
@@ -202,20 +202,17 @@ if opcao == "📊 Dashboard Principal":
             total_auditorias = len(df_dash_view)
             pendentes, justificadas, canceladas, auditadas, progresso = 0, 0, 0, 0, 0
 
-        # --- Linha de KPIs Executivos ---
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Pontos Filtrados", total_auditorias)
         col2.metric("Auditados", auditadas, f"{progresso}% do conjunto")
         col3.metric("Pendentes", pendentes)
         col4.metric("Justificados", justificadas)
         
-        # --- Barra de Progresso Visual ---
         st.markdown("### Progresso da Auditoria")
         st.progress(progresso / 100, text=f"Conclusão: {progresso}%")
         
         st.markdown("---")
 
-        # --- Gráfico de Pizza (Percentual dos Status dos Cartões) ---
         st.subheader("🥧 Distribuição Percentual dos Status")
         if "Status" in df_dash_view.columns and not df_dash_view.empty:
             df_status_counts = df_dash_view["Status"].value_counts().reset_index()
@@ -242,12 +239,8 @@ if opcao == "📊 Dashboard Principal":
                 margin=dict(l=20, r=20, t=20, b=20)
             )
             st.plotly_chart(fig_pizza, use_container_width=True)
-        else:
-            st.info("Sem dados suficientes para gerar o gráfico de pizza.")
 
         st.markdown("---")
-
-        # --- Layout Principal: Gráfico de Bairros e Ranking ---
         col_left, col_right = st.columns([2, 1])
 
         with col_left:
@@ -276,8 +269,6 @@ if opcao == "📊 Dashboard Principal":
                         margin=dict(l=10, r=10, t=10, b=10)
                     )
                     st.plotly_chart(fig_bairro_status, use_container_width=True)
-                else:
-                    st.info("Sem dados para exibir no gráfico com os filtros atuais.")
 
         with col_right:
             st.subheader("📋 Top Bairros com Pendências")
@@ -289,15 +280,6 @@ if opcao == "📊 Dashboard Principal":
                     st.dataframe(top_pendencias.head(6), use_container_width=True, hide_index=True)
                 else:
                     st.success("Nenhum ponto pendente nos critérios selecionados!")
-
-        st.markdown("---")
-        st.subheader("🔍 Visualização Rápida dos Registros Filtrados")
-        
-        colunas_exibir = [c for c in ["Destinatário", "Rua", "Bairro", "Status", "Data_Visita"] if c in df_dash_view.columns]
-        if not colunas_exibir:
-            colunas_exibir = df_dash_view.columns[:5]
-            
-        st.dataframe(df_dash_view[colunas_exibir], use_container_width=True, hide_index=True)
 
     else:
         st.info("A carregar dados do Google Sheets...")
@@ -323,10 +305,8 @@ elif opcao == "🗺️ Mapa Interativo":
             try:
                 lat_val = row["Latitude"]
                 lon_val = row["Longitude"]
-                
                 if pd.isna(lat_val) or pd.isna(lon_val) or str(lat_val).strip() == "" or str(lon_val).strip() == "":
                     continue
-                    
                 lat = float(lat_val)
                 lon = float(lon_val)
                 
@@ -338,7 +318,6 @@ elif opcao == "🗺️ Mapa Interativo":
                         
                 status = row.get("Status", "N/D")
                 bairro = row.get("Bairro", "N/D")
-                
                 popup_html = f"<b>{dest}</b><br>Bairro: {bairro}<br>Status: {status}"
                 
                 folium.Marker(
@@ -380,7 +359,11 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
                 client = gspread.authorize(creds)
                 sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
                 sheet.append_row([destinatario, rua, numero, bairro, cidade, estado, cep, "", status_reg, "", "", ""])
+                
+                # Invalidação forçada do cache atualizando a versão na sessão
                 st.cache_data.clear()
+                st.session_state["versao_dados"] += 1
+                
                 st.session_state["mensagem_sucesso"] = "✅ Registo adicionado com sucesso!"
                 st.rerun()
             except Exception as e:
@@ -483,7 +466,10 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
                         range_celulas = gspread.utils.rowcol_to_a1(linha_planilha, 1) + ":" + gspread.utils.rowcol_to_a1(linha_planilha, num_colunas)
                         sheet.update(range_celulas, [valores_linha])
                     
+                    # Invalidação forçada do cache incrementando a versão e limpando a cache nativa
                     st.cache_data.clear()
+                    st.session_state["versao_dados"] += 1
+                    
                     st.session_state["mensagem_sucesso"] = "✅ Alterações feitas e guardadas com sucesso no Google Sheets!"
                     st.rerun()
                 except Exception as e:

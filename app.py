@@ -427,13 +427,23 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
                         ]
                     )
                     client = gspread.authorize(creds)
-                    sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
+                    spreadsheet = client.open("Roteiro MooveChain Florianóplis 2026")
+                    sheet = spreadsheet.sheet1
                     
                     cabecalhos_planilha = sheet.row_values(1)
                     
                     for idx in linhas_selecionadas_indices:
                         linha_planilha = idx + 2
                         linha_editada = edited_panel.loc[idx]
+                        
+                        status_antigo = str(df_dados.loc[idx].get("Status", "")).strip().lower()
+                        status_novo = str(linha_editada.get("Status", "")).strip().lower()
+                        
+                        # Se o status era Pendente e mudou para outro estado, atualiza a Data_Visita automaticamente
+                        if "pendente" in status_antigo and "pendente" not in status_novo:
+                            data_atual = pd.Timestamp.now().strftime("%d/%m/%Y %H:%M:%S")
+                            if "Data_Visita" in edited_panel.columns:
+                                linha_editada["Data_Visita"] = data_atual
                         
                         valores_linha = []
                         for col in cabecalhos_planilha:

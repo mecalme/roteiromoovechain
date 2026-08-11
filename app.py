@@ -54,6 +54,9 @@ if "filtro_bairro" not in st.session_state:
 if "filtro_status" not in st.session_state:
     st.session_state["filtro_status"] = []
 
+if "mensagem_sucesso" not in st.session_state:
+    st.session_state["mensagem_sucesso"] = ""
+
 # --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS ROBUSTA ---
 @st.cache_data(ttl=60)
 def carregar_dados():
@@ -115,15 +118,24 @@ else:
 
 opcao = st.sidebar.radio("Ir para:", lista_menu)
 
+# Exibição global de mensagem de sucesso persistente, se houver
+if st.session_state["mensagem_sucesso"]:
+    st.success(st.session_state["mensagem_sucesso"])
+    st.session_state["mensagem_sucesso"] = ""
+
 # --- 5. LÓGICA DAS SECÇÕES DA APLICAÇÃO ---
 
 if opcao == "📊 Dashboard Principal":
     st.title("📊 Dashboard Auditorias Moovechain - 2026")
     
     if not df_dados.empty:
-        # --- Filtros Globais do Dashboard em Multiselect (Estado, Cidade, Bairro e Status) ---
+        # Converter coluna de data para datetime caso exista
+        if "Data_Visita" in df_dados.columns:
+            df_dados["Data_Visita"] = pd.to_datetime(df_dados["Data_Visita"], errors="coerce")
+
+        # --- Filtros Globais do Dashboard em Multiselect e Intervalo de Datas ---
         st.markdown("### 🔍 Filtros do Dashboard")
-        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+        col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns([1, 1, 1, 1, 1.5])
         
         estados_disponiveis = sorted(df_dados["Estado"].dropna().unique().tolist()) if "Estado" in df_dados.columns else []
         cidades_disponiveis = sorted(df_dados["Cidade"].dropna().unique().tolist()) if "Cidade" in df_dados.columns else []
@@ -138,8 +150,24 @@ if opcao == "📊 Dashboard Principal":
             filtro_bairro_dash = st.multiselect("Filtrar por Bairro(s)", bairros_disponiveis, key="dash_bairro_multi")
         with col_f4:
             filtro_status_dash = st.multiselect("Filtrar por Status", status_disponiveis, key="dash_status_multi")
+        with col_f5:
+            st.markdown("**Período da Visita**")
+            if "Data_Visita" in df_dados.columns and not df_dados["Data_Visita"].dropna().empty:
+                min_data = df_dados["Data_Visita"].min().date()
+                max_data = df_dados["Data_Visita"].max().date()
+                intervalo_datas = st.date_input(
+                    "Selecione o intervalo",
+                    value=(min_data, max_data),
+                    min_value=min_data,
+                    max_value=max_data,
+                    key="dash_intervalo_datas",
+                    label_visibility="collapsed"
+                )
+            else:
+                intervalo_datas = None
+                st.info("Data indisponível.")
 
-        # Aplicação dos filtros multiselect em cascata
+        # Aplicação dos filtros em cascata (Multiselect + Intervalo de Datas com preservação de nulos)
         df_dash_view = df_dados.copy()
         if filtro_estado_dash and "Estado" in df_dash_view.columns:
             df_dash_view = df_dash_view[df_dash_view["Estado"].isin(filtro_estado_dash)]
@@ -150,6 +178,14 @@ if opcao == "📊 Dashboard Principal":
         if filtro_status_dash and "Status" in df_dash_view.columns:
             condicao_status = df_dash_view["Status"].apply(lambda s: any(st_val.lower() in str(s).lower() for st_val in filtro_status_dash))
             df_dash_view = df_dash_view[condicao_status]
+            
+        if intervalo_datas and len(intervalo_datas) == 2 and "Data_Visita" in df_dash_view.columns:
+            data_inicio, data_fim = intervalo_datas
+            condicao_data = (
+                (df_dash_view["Data_Visita"].dt.date >= data_inicio) & 
+                (df_dash_view["Data_Visita"].dt.date <= data_fim)
+            ) | (df_dash_view["Data_Visita"].isna())
+            df_dash_view = df_dash_view[condicao_data]
 
         st.markdown("---")
 
@@ -344,8 +380,8 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
                 client = gspread.authorize(creds)
                 sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
                 sheet.append_row([destinatario, rua, numero, bairro, cidade, estado, cep, "", status_reg, "", "", ""])
-                st.success("Registo adicionado com sucesso!")
                 st.cache_data.clear()
+                st.session_state["mensagem_sucesso"] = "✅ Registo adicionado com sucesso!"
                 st.rerun()
             except Exception as e:
                 st.error(f"Erro ao adicionar registo: {e}")
@@ -447,8 +483,8 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
                         range_celulas = gspread.utils.rowcol_to_a1(linha_planilha, 1) + ":" + gspread.utils.rowcol_to_a1(linha_planilha, num_colunas)
                         sheet.update(range_celulas, [valores_linha])
                     
-                    st.success("Dados alterados e guardados com sucesso no Google Sheets!")
                     st.cache_data.clear()
+                    st.session_state["mensagem_sucesso"] = "✅ Alterações feitas e guardadas com sucesso no Google Sheets!"
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao atualizar dados na planilha: {e}")

@@ -72,20 +72,13 @@ def carregar_dados():
         sheet_principal = spreadsheet.sheet1
         dados_principais = sheet_principal.get_all_records()
         df_dados = pd.DataFrame(dados_principais)
-        
-        try:
-            sheet_custos = spreadsheet.worksheet("Controle_Custos")
-            dados_custos = sheet_custos.get_all_records()
-            df_custos = pd.DataFrame(dados_custos)
-        except Exception:
-            df_custos = pd.DataFrame()
             
-        return df_dados, df_custos
+        return df_dados, pd.DataFrame()
     except Exception as e:
         st.error(f"Erro ao ligar ao Google Sheets: {e}")
         return pd.DataFrame(), pd.DataFrame()
 
-df_dados, df_custos = carregar_dados()
+df_dados, _ = carregar_dados()
 
 # --- 4. BARRA LATERAL (MENU E AUTENTICAÇÃO) ---
 st.sidebar.title("🚚 Painel MooveChain")
@@ -112,9 +105,7 @@ st.sidebar.subheader("Navegação")
 opcoes_publicas = ["📊 Dashboard Principal", "🗺️ Mapa Interativo"]
 opcoes_admin = [
     "➕ Adicionar Novo Registro",
-    "📋 Tabela de Dados e Ações",
-    "🛠️ Manutenção e Limpeza de Coordenadas",
-    "💰 Custos Logísticos"
+    "📋 Tabela de Dados e Ações"
 ]
 
 if st.session_state["autenticado"]:
@@ -465,17 +456,3 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
             st.info("ℹ️ Selecione pelo menos uma linha na tabela acima com o 'checkbox' para habilitar o Painel de Edição.")
     else:
         st.info("Nenhum dado disponível na tabela principal.")
-
-elif opcao == "🛠️ Manutenção e Limpeza de Coordenadas" and st.session_state["autenticado"]:
-    st.title("🛠️ Manutenção e Limpeza de Coordenadas")
-    st.write("Ferramenta para reprocessamento geográfico de endereços pendentes.")
-
-elif opcao == "💰 Custos Logísticos" and st.session_state["autenticado"]:
-    st.title("💰 Custos Logísticos")
-    if not df_custos.empty:
-        st.dataframe(df_custos, use_container_width=True)
-        if "Categoria" in df_custos.columns and "Valor" in df_custos.columns:
-            fig_custos = px.pie(df_custos, names="Categoria", values="Valor", title="Distribuição de Custos Logísticos")
-            st.plotly_chart(fig_custos, use_container_width=True)
-    else:
-        st.info("Nenhum dado de custos encontrado na aba 'Controle_Custos'.")

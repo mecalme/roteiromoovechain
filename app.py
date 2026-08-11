@@ -121,13 +121,9 @@ if opcao == "📊 Dashboard Principal":
     st.title("📊 Dashboard Auditorias Moovechain - 2026")
     
     if not df_dados.empty:
-        # Converter coluna de data para datetime caso exista
-        if "Data_Visita" in df_dados.columns:
-            df_dados["Data_Visita"] = pd.to_datetime(df_dados["Data_Visita"], errors="coerce")
-
-        # --- Filtros Globais do Dashboard em Multiselect e Intervalo de Datas ---
+        # --- Filtros Globais do Dashboard em Multiselect (Estado, Cidade, Bairro e Status) ---
         st.markdown("### 🔍 Filtros do Dashboard")
-        col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns([1, 1, 1, 1, 1.5])
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
         
         estados_disponiveis = sorted(df_dados["Estado"].dropna().unique().tolist()) if "Estado" in df_dados.columns else []
         cidades_disponiveis = sorted(df_dados["Cidade"].dropna().unique().tolist()) if "Cidade" in df_dados.columns else []
@@ -142,24 +138,8 @@ if opcao == "📊 Dashboard Principal":
             filtro_bairro_dash = st.multiselect("Filtrar por Bairro(s)", bairros_disponiveis, key="dash_bairro_multi")
         with col_f4:
             filtro_status_dash = st.multiselect("Filtrar por Status", status_disponiveis, key="dash_status_multi")
-        with col_f5:
-            st.markdown("**Período da Visita**")
-            if "Data_Visita" in df_dados.columns and not df_dados["Data_Visita"].dropna().empty:
-                min_data = df_dados["Data_Visita"].min().date()
-                max_data = df_dados["Data_Visita"].max().date()
-                intervalo_datas = st.date_input(
-                    "Selecione o intervalo",
-                    value=(min_data, max_data),
-                    min_value=min_data,
-                    max_value=max_data,
-                    key="dash_intervalo_datas",
-                    label_visibility="collapsed"
-                )
-            else:
-                intervalo_datas = None
-                st.info("Data indisponível.")
 
-        # Aplicação dos filtros em cascata (Multiselect + Intervalo de Datas)
+        # Aplicação dos filtros multiselect em cascata
         df_dash_view = df_dados.copy()
         if filtro_estado_dash and "Estado" in df_dash_view.columns:
             df_dash_view = df_dash_view[df_dash_view["Estado"].isin(filtro_estado_dash)]
@@ -170,13 +150,6 @@ if opcao == "📊 Dashboard Principal":
         if filtro_status_dash and "Status" in df_dash_view.columns:
             condicao_status = df_dash_view["Status"].apply(lambda s: any(st_val.lower() in str(s).lower() for st_val in filtro_status_dash))
             df_dash_view = df_dash_view[condicao_status]
-            
-        if intervalo_datas and len(intervalo_datas) == 2 and "Data_Visita" in df_dash_view.columns:
-            data_inicio, data_fim = intervalo_datas
-            df_dash_view = df_dash_view[
-                (df_dash_view["Data_Visita"].dt.date >= data_inicio) & 
-                (df_dash_view["Data_Visita"].dt.date <= data_fim)
-            ]
 
         st.markdown("---")
 

@@ -8,6 +8,7 @@ import streamlit as st
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 from google.oauth2.service_account import Credentials
+from datetime import date
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILOS CSS ---
 st.set_page_config(
@@ -131,7 +132,6 @@ if opcao == "📊 Dashboard Principal":
     
     if not df_dados.empty:
         if "Data_Visita" in df_dados.columns:
-            # dayfirst=True garante a leitura correta de datas brasileiras (DD/MM/AAAA)
             df_dados["Data_Visita"] = pd.to_datetime(df_dados["Data_Visita"], dayfirst=True, errors="coerce")
 
         st.markdown("---")
@@ -250,11 +250,9 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
     if not df_dados.empty:
         df_fin = df_dados.copy()
         
-        # Converte data respeitando o formato brasileiro (dia/mês/ano)
         if "Data_Visita" in df_fin.columns:
             df_fin["Data_Visita"] = pd.to_datetime(df_fin["Data_Visita"], dayfirst=True, errors="coerce")
 
-        # Identificar coluna de ganho
         coluna_ganho_alvo = None
         for col in ["Ganho", "Ganhos", "Valor", "Preço"]:
             if col in df_fin.columns:
@@ -304,12 +302,19 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
             if "Data_Visita" in df_fin.columns and not df_fin["Data_Visita"].dropna().empty:
                 min_dt = df_fin["Data_Visita"].min().date()
                 max_dt = df_fin["Data_Visita"].max().date()
+                
                 intervalo_dt = st.date_input(
                     "Intervalo de Datas da Visita",
                     value=(min_dt, max_dt),
                     min_value=min_dt,
                     max_value=max_dt
                 )
+                
+                # Exibe o período ativo explicitamente no formato brasileiro (DD/MM/AAAA)
+                if isinstance(intervalo_dt, tuple) and len(intervalo_dt) == 2:
+                    d_ini_fmt = intervalo_dt[0].strftime("%d/%m/%Y")
+                    d_fim_fmt = intervalo_dt[1].strftime("%d/%m/%Y")
+                    st.caption(f"📅 Período ativo: **{d_ini_fmt} até {d_fim_fmt}**")
             else:
                 intervalo_dt = None
 

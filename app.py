@@ -60,7 +60,7 @@ if "filtro_status" not in st.session_state:
 if "mensagem_sucesso" not in st.session_state:
     st.session_state["mensagem_sucesso"] = ""
 
-# --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS COM CONTROLO DE VERSÃO ---
+# --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS COM CONTROLE DE VERSÃO ---
 @st.cache_data(ttl=60)
 def carregar_dados_cache(versao):
     try:
@@ -141,8 +141,8 @@ if opcao == "📊 Dashboard Principal":
         if "Status" in df_dados.columns:
             total_auditorias = len(df_dados)
             pendentes = len(df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)])
-            justificadas = len(df_dados[df_dados["Status"].str.contains("Justificad", case=False, na=False)])
-            canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelad", case=False, na=False)])
+            justificadas = len(df_dados[df_dados["Status"].str.contains("Justificado", case=False, na=False)])
+            canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelado", case=False, na=False)])
             auditadas = len(df_dados[df_dados["Status"].str.contains("Auditado", case=False, na=False)])
             
             progresso = int((auditadas / total_auditorias * 100)) if total_auditorias > 0 else 0
@@ -151,7 +151,7 @@ if opcao == "📊 Dashboard Principal":
             pendentes, justificadas, canceladas, auditadas, progresso = 0, 0, 0, 0, 0
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Pontos Filtrados", total_auditorias)
+        col1.metric("Total", total_auditorias)
         col2.metric("Auditados", auditadas, f"{progresso}% do conjunto")
         col3.metric("Pendentes", pendentes)
         col4.metric("Justificados", justificadas)

@@ -318,33 +318,47 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
             else:
                 intervalo_dt = None
 
-        # Aplicar filtros
-        if filtro_status_fin and "Status" in df_fin.columns:
-            df_fin = df_fin[df_fin["Status"].isin(filtro_status_fin)]
+        # Aplicar filtros de status selecionados
+        df_calculo = df_fin.copy()
+        if filtro_status_fin and "Status" in df_calculo.columns:
+            df_calculo = df_calculo[df_calculo["Status"].isin(filtro_status_fin)]
 
-        if intervalo_dt and len(intervalo_dt) == 2 and "Data_Visita" in df_fin.columns:
+        # Aplicar intervalo de datas
+        if intervalo_dt and len(intervalo_dt) == 2 and "Data_Visita" in df_calculo.columns:
             d_ini, d_fim = intervalo_dt
-            df_fin = df_fin[
-                ((df_fin["Data_Visita"].dt.date >= d_ini) & 
-                 (df_fin["Data_Visita"].dt.date <= d_fim)) | 
-                (df_fin["Data_Visita"].isna())
+            df_calculo = df_calculo[
+                ((df_calculo["Data_Visita"].dt.date >= d_ini) & 
+                 (df_calculo["Data_Visita"].dt.date <= d_fim)) | 
+                (df_calculo["Data_Visita"].isna())
             ]
 
         st.markdown("---")
 
-        total_ganho_filtrado = df_fin["Ganho_Num"].sum()
-        total_pontos_fin = len(df_fin)
-        media_por_ponto = total_ganho_filtrado / total_pontos_fin if total_pontos_fin > 0 else 0.0
+        # Ganhos Totais baseados no filtro geral
+        total_ganho_filtrado = df_calculo["Ganho_Num"].sum()
+
+        # Pontos Realizados: Filtrados por data + status, EXCLUINDO os pendentes e exigindo data preenchida
+        if "Status" in df_calculo.columns and "Data_Visita" in df_calculo.columns:
+            mask_realizados = (
+                ~df_calculo["Status"].str.contains("Pendente", case=False, na=False) &
+                df_calculo["Data_Visita"].notna()
+            )
+            total_pontos_realizados = len(df_calculo[mask_realizados])
+        else:
+            total_pontos_realizados = 0
+
+        # Média calculada estritamente pelos Pontos Realizados (excluindo pendentes)
+        media_por_ponto = total_ganho_filtrado / total_pontos_realizados if total_pontos_realizados > 0 else 0.0
 
         m1, m2, m3 = st.columns(3)
         m1.metric("💰 Ganhos Totais (Filtro Aplicado)", f"R$ {total_ganho_filtrado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-        m2.metric("📍 Pontos Considerados", total_pontos_fin)
+        m2.metric("📍 Pontos Realizados", total_pontos_realizados)
         m3.metric("📊 Média por Ponto", f"R$ {media_por_ponto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         st.markdown("---")
         st.subheader("📊 Ganhos Acumulados por Status")
-        if not df_fin.empty and "Status" in df_fin.columns:
-            df_status_ganhos = df_fin.groupby("Status")["Ganho_Num"].sum().reset_index()
+        if not df_calculo.empty and "Status" in df_calculo.columns:
+            df_status_ganhos = df_calculo.groupby("Status")["Ganho_Num"].sum().reset_index()
             fig_fin_status = px.bar(
                 df_status_ganhos,
                 x="Status",
@@ -372,8 +386,8 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
 
         st.markdown("---")
         st.subheader("📋 Detalhamento Financeiro dos Registos")
-        colunas_exibir = [c for c in ["Destinatário", "Bairro", "Status", "Data_Visita", coluna_ganho_alvo] if c and c in df_fin.columns]
-        st.dataframe(df_fin[colunas_exibir], use_container_width=True, hide_index=True)
+        colunas_exibir = [c for c in ["Destinatário", "Bairro", "Status", "Data_Visita", coluna_ganho_alvo] if c and c in df_calculo.columns]
+        st.dataframe(df_calculo[colunas_exibir], use_container_width=True, hide_index=True)
 
     else:
         st.info("Nenhum dado financeiro disponível.")

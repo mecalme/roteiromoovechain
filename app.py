@@ -60,7 +60,7 @@ if "filtro_status" not in st.session_state:
 if "mensagem_sucesso" not in st.session_state:
     st.session_state["mensagem_sucesso"] = ""
 
-# --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS COM CONTROLE DE VERSÃO ---
+# --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS COM CONTROLO DE VERSÃO ---
 @st.cache_data(ttl=60)
 def carregar_dados_cache(versao):
     try:
@@ -141,8 +141,8 @@ if opcao == "📊 Dashboard Principal":
         if "Status" in df_dados.columns:
             total_auditorias = len(df_dados)
             pendentes = len(df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)])
-            justificadas = len(df_dados[df_dados["Status"].str.contains("Justificado", case=False, na=False)])
-            canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelado", case=False, na=False)])
+            justificadas = len(df_dados[df_dados["Status"].str.contains("Justificad", case=False, na=False)])
+            canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelad", case=False, na=False)])
             auditadas = len(df_dados[df_dados["Status"].str.contains("Auditado", case=False, na=False)])
             
             progresso = int((auditadas / total_auditorias * 100)) if total_auditorias > 0 else 0
@@ -151,7 +151,7 @@ if opcao == "📊 Dashboard Principal":
             pendentes, justificadas, canceladas, auditadas, progresso = 0, 0, 0, 0, 0
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Auditorias", total_auditorias)
+        col1.metric("Pontos Filtrados", total_auditorias)
         col2.metric("Auditados", auditadas, f"{progresso}% do conjunto")
         col3.metric("Pendentes", pendentes)
         col4.metric("Justificados", justificadas)
@@ -204,9 +204,9 @@ if opcao == "📊 Dashboard Principal":
                         barmode="stack",
                         color_discrete_map={
                             "Auditado": "#22c55e",
-                            "Pendente": "#002df5",
-                            "Justificado": "#f11919",
-                            "Cancelada": "#080808"
+                            "Pendente": "#f59e0b",
+                            "Justificado": "#38bdf8",
+                            "Cancelada": "#ef4444"
                         }
                     )
                     fig_bairro_status.update_layout(
@@ -329,6 +329,12 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
         cidades_disponiveis = sorted(df_dados["Cidade"].dropna().unique().tolist()) if "Cidade" in df_dados.columns else []
         bairros_disponiveis = sorted(df_dados["Bairro"].dropna().unique().tolist()) if "Bairro" in df_dados.columns else []
         status_disponiveis = sorted(df_dados["Status"].dropna().unique().tolist()) if "Status" in df_dados.columns else []
+        
+        # Filtrar valores salvos na sessão para conter apenas opções existentes
+        st.session_state["filtro_estado"] = [x for x in st.session_state["filtro_estado"] if x in estados_disponiveis]
+        st.session_state["filtro_cidade"] = [x for x in st.session_state["filtro_cidade"] if x in cidades_disponiveis]
+        st.session_state["filtro_bairro"] = [x for x in st.session_state["filtro_bairro"] if x in bairros_disponiveis]
+        st.session_state["filtro_status"] = [x for x in st.session_state["filtro_status"] if x in status_disponiveis]
         
         with f_col1:
             st.session_state["filtro_estado"] = st.multiselect("Estado", estados_disponiveis, default=st.session_state["filtro_estado"])

@@ -294,11 +294,11 @@ elif opcao == "🗺️ Mapa Interativo":
             if "auditado" in status_str:
                 return "green"
             elif "pendente" in status_str:
-                return "orange"
-            elif "justificad" in status_str:
                 return "blue"
-            elif "cancelad" in status_str:
+            elif "justificad" in status_str:
                 return "red"
+            elif "cancelad" in status_str:
+                return "black"
             return "gray"
 
         for _, row in df_dados.iterrows():

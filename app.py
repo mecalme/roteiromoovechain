@@ -111,6 +111,7 @@ st.sidebar.subheader("Navegação")
 
 opcoes_publicas = ["📊 Dashboard Principal", "🗺️ Mapa Interativo"]
 opcoes_admin = [
+    "💰 Dashboard Financeiro",
     "➕ Adicionar Novo Registro",
     "📋 Tabela de Dados e Ações"
 ]
@@ -285,6 +286,126 @@ elif opcao == "🗺️ Mapa Interativo":
         st_folium(m, width=1200, height=500)
     else:
         st.warning("Coordenadas não disponíveis para exibir o mapa.")
+
+elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
+    st.title("💰 Dashboard Financeiro de Auditorias")
+    st.write("Análise financeira dos ganhos calculados com base nos pontos visitados e status.")
+
+    if not df_dados.empty:
+        df_fin = df_dados.copy()
+        
+        # Converter coluna de data para datetime
+        if "Data_Visita" in df_fin.columns:
+            df_fin["Data_Visita"] = pd.to_datetime(df_fin["Data_Visita"], errors="coerce")
+
+        # Tratamento da coluna de Ganhos (remove símbolos de moeda se existirem e converte para float)
+        coluna_ganho_alvo = None
+        for col in ["Ganho", "Ganhos", "Valor", "Preço"]:
+            if col in df_fin.columns:
+                coluna_ganho_alvo = col
+                break
+
+        if coluna_ganho_alvo:
+            def limpar_moeda(val):
+                if pd.isna(val):
+                    return 0.0
+                if isinstance(val, (int, float)):
+                    return float(val)
+                val_str = str(val).replace("R$", "").replace("€", "").replace(".", "").replace(",", ".").strip()
+                try:
+                    return float(val_str)
+                except:
+                    return 0.0
+
+            df_fin["Ganho_Num"] = df_fin[coluna_ganho_alvo].apply(limpar_moeda)
+        else:
+            df_fin["Ganho_Num"] = 0.0
+            st.warning("⚠️ Coluna de 'Ganho' ou equivalente não encontrada na planilha. Os valores financeiros mostrarão 0.")
+
+        st.markdown("### 📅 Filtros Financeiros")
+        f_col1, f_col2 = st.columns([2, 2])
+
+        with f_col1:
+            status_disponiveis = sorted(df_fin["Status"].dropna().unique().tolist()) if "Status" in df_fin.columns else []
+            filtro_status_fin = st.multiselect(
+                "Filtrar por Status para Cálculo",
+                status_disponiveis,
+                default=status_disponiveis if status_disponiveis else []
+            )
+
+        with f_col2:
+            if "Data_Visita" in df_fin.columns and not df_fin["Data_Visita"].dropna().empty:
+                min_dt = df_fin["Data_Visita"].min().date()
+                max_dt = df_fin["Data_Visita"].max().date()
+                intervalo_dt = st.date_input(
+                    "Intervalo de Datas da Visita",
+                    value=(min_dt, max_dt),
+                    min_value=min_dt,
+                    max_value=max_dt
+                )
+            else:
+                intervalo_dt = None
+
+        # Aplicar filtros no dataframe financeiro
+        if filtro_status_fin and "Status" in df_fin.columns:
+            df_fin = df_fin[df_fin["Status"].isin(filtro_status_fin)]
+
+        if intervalo_dt and len(intervalo_dt) == 2 and "Data_Visita" in df_fin.columns:
+            d_ini, d_fim = intervalo_dt
+            df_fin = df_fin[
+                (df_fin["Data_Visita"].dt.date >= d_ini) & 
+                (df_fin["Data_Visita"].dt.date <= d_fim) | 
+                (df_fin["Data_Visita"].isna())
+            ]
+
+        st.markdown("---")
+
+        # Métricas Financeiras
+        total_ganho_filtrado = df_fin["Ganho_Num"].sum()
+        total_pontos_fin = len(df_fin)
+        media_por_ponto = total_ganho_filtrado / total_pontos_fin if total_pontos_fin > 0 else 0.0
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("💰 Ganhos Totais (Filtro Aplicado)", f"R$ {total_ganho_filtrado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        m2.metric("📍 Pontos Considerados", total_pontos_fin)
+        m3.metric("📊 Média por Ponto", f"R$ {media_por_ponto:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+        st.markdown("---")
+        st.subheader("📊 Ganhos Acumulados por Status")
+        if not df_fin.empty and "Status" in df_fin.columns:
+            df_status_ganhos = df_fin.groupby("Status")["Ganho_Num"].sum().reset_index()
+            fig_fin_status = px.bar(
+                df_status_ganhos,
+                x="Status",
+                y="Ganho_Num",
+                text=df_status_ganhos["Ganho_Num"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")),
+                color="Status",
+                color_discrete_map={
+                    "Auditado": "#22c55e",
+                    "Pendente": "#f59e0b",
+                    "Justificado": "#38bdf8",
+                    "Cancelada": "#ef4444"
+                }
+            )
+            fig_fin_status.update_traces(textposition="outside", textfont_size=13)
+            fig_fin_status.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#f1f5f9"),
+                xaxis=dict(title="Status do Ponto"),
+                yaxis=dict(title="Ganhos (R$)"),
+                margin=dict(l=10, r=10, t=20, b=10),
+                showlegend=False
+            )
+            st.plotly_chart(fig_fin_status, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("📋 Detalhamento Financeiro dos Registos")
+        colunas_exibir = [c for c in ["Destinatário", "Bairro", "Status", "Data_Visita", coluna_ganho_alvo] if c and c in df_fin.columns]
+        st.dataframe(df_fin[colunas_exibir], use_container_width=True, hide_index=True)
+
+    else:
+        st.info("Nenhum dado financeiro disponível.")
 
 elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
     st.title("➕ Adicionar Novo Registro de Auditoria")

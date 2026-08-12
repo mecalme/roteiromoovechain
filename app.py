@@ -151,7 +151,7 @@ if opcao == "📊 Dashboard Principal":
             pendentes, justificadas, canceladas, auditadas, progresso = 0, 0, 0, 0, 0
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total", total_auditorias)
+        col1.metric("Total Auditorias", total_auditorias)
         col2.metric("Auditados", auditadas, f"{progresso}% do conjunto")
         col3.metric("Pendentes", pendentes)
         col4.metric("Justificados", justificadas)
@@ -204,9 +204,9 @@ if opcao == "📊 Dashboard Principal":
                         barmode="stack",
                         color_discrete_map={
                             "Auditado": "#22c55e",
-                            "Pendente": "#f59e0b",
-                            "Justificado": "#38bdf8",
-                            "Cancelada": "#ef4444"
+                            "Pendente": "#002df5",
+                            "Justificado": "#f11919",
+                            "Cancelada": "#080808"
                         }
                     )
                     fig_bairro_status.update_layout(

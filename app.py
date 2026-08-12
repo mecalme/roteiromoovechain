@@ -161,16 +161,18 @@ if opcao == "📊 Dashboard Principal":
         
         st.markdown("---")
 
-        st.subheader("🥧 Distribuição Percentual dos Status")
+        st.subheader("📈 Visão Geral dos Status (Distribuição)")
         if "Status" in df_dados.columns and not df_dados.empty:
             df_status_counts = df_dados["Status"].value_counts().reset_index()
             df_status_counts.columns = ["Status", "Quantidade"]
+            df_status_counts["Percentual"] = (df_status_counts["Quantidade"] / total_auditorias * 100).round(1)
             
-            fig_pizza = px.pie(
+            fig_barras_status = px.bar(
                 df_status_counts,
-                names="Status",
-                values="Quantidade",
-                hole=0.4,
+                x="Quantidade",
+                y="Status",
+                orientation="h",
+                text=df_status_counts.apply(lambda r: f"{r['Quantidade']} ({r['Percentual']}%)", axis=1),
                 color="Status",
                 color_discrete_map={
                     "Auditado": "#22c55e",
@@ -179,14 +181,17 @@ if opcao == "📊 Dashboard Principal":
                     "Cancelada": "#ef4444"
                 }
             )
-            fig_pizza.update_traces(textinfo="percent+label", textfont_size=14)
-            fig_pizza.update_layout(
+            fig_barras_status.update_traces(textposition="outside", textfont_size=13)
+            fig_barras_status.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(0,0,0,0)",
                 font=dict(color="#f1f5f9"),
-                margin=dict(l=20, r=20, t=20, b=20)
+                xaxis=dict(showgrid=True, gridcolor="#334155", title="Quantidade"),
+                yaxis=dict(showgrid=False, title=""),
+                margin=dict(l=10, r=40, t=10, b=10),
+                showlegend=False
             )
-            st.plotly_chart(fig_pizza, use_container_width=True)
+            st.plotly_chart(fig_barras_status, use_container_width=True)
 
         st.markdown("---")
         col_left, col_right = st.columns([2, 1])

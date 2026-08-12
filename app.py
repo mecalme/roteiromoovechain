@@ -296,7 +296,7 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
         
         # Converter coluna de data para datetime
         if "Data_Visita" in df_fin.columns:
-            df_fin["Data_Visita"] = pd.to_datetime(df_fin["Data_Visita"], errors="coerce")
+            df_fin["Data_Visita"] = pd.to_datetime(df_fin["Data_Visita"], dayfirst=True, errors="coerce")
 
         # Identificar coluna de ganho
         coluna_ganho_alvo = None

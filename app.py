@@ -245,7 +245,7 @@ elif opcao == "🗺️ Mapa Interativo":
 
 elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
     st.title("💰 Dashboard Financeiro de Auditorias")
-    st.write("Análise financeira dos ganhos calculados com base nos pontos visitados e status.")
+    st.write("Análise financeira com base nos valores da planilha ou tabela de ganhos.")
 
     if not df_dados.empty:
         df_fin = df_dados.copy()
@@ -253,6 +253,7 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
         if "Data_Visita" in df_fin.columns:
             df_fin["Data_Visita"] = pd.to_datetime(df_fin["Data_Visita"], dayfirst=True, errors="coerce")
 
+        # Identificar coluna de ganho na planilha
         coluna_ganho_alvo = None
         for col in ["Ganho", "Ganhos", "Valor", "Preço"]:
             if col in df_fin.columns:
@@ -264,28 +265,17 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
                 return 0.0
             if isinstance(val, (int, float)):
                 return float(val)
-            
             val_str = str(val).strip()
             if not val_str or val_str.lower() in ["nan", "none", ""]:
                 return 0.0
-                
             val_str = val_str.replace("R$", "").replace("€", "").strip()
-            
             if "," in val_str:
                 val_str = val_str.replace(".", "").replace(",", ".")
-            
             val_str = re.sub(r"[^\d\.-]", "", val_str)
-            
             try:
                 return float(val_str)
             except ValueError:
                 return 0.0
-
-        if coluna_ganho_alvo:
-            df_fin["Ganho_Num"] = df_fin[coluna_ganho_alvo].apply(limpar_moeda)
-        else:
-            df_fin["Ganho_Num"] = 0.0
-            st.warning("⚠️ Coluna de 'Ganho' não encontrada na planilha.")
 
         st.markdown("### 📅 Filtros Financeiros")
         f_col1, f_col2 = st.columns([2, 2])
@@ -310,7 +300,6 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
                     max_value=max_dt
                 )
                 
-                # Exibe o período ativo explicitamente no formato brasileiro (DD/MM/AAAA)
                 if isinstance(intervalo_dt, tuple) and len(intervalo_dt) == 2:
                     d_ini_fmt = intervalo_dt[0].strftime("%d/%m/%Y")
                     d_fim_fmt = intervalo_dt[1].strftime("%d/%m/%Y")
@@ -334,20 +323,41 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
 
         st.markdown("---")
 
-        # Ganhos Totais baseados no filtro geral
-        total_ganho_filtrado = df_calculo["Ganho_Num"].sum()
-
-        # Pontos Realizados: Filtrados por data + status, EXCLUINDO os pendentes e exigindo data preenchida
+        # Identificar Pontos Realizados (Com data, status diferente de Pendente)
         if "Status" in df_calculo.columns and "Data_Visita" in df_calculo.columns:
             mask_realizados = (
                 ~df_calculo["Status"].str.contains("Pendente", case=False, na=False) &
                 df_calculo["Data_Visita"].notna()
             )
-            total_pontos_realizados = len(df_calculo[mask_realizados])
+            df_realizados = df_calculo[mask_realizados]
+            total_pontos_realizados = len(df_realizados)
         else:
             total_pontos_realizados = 0
 
-        # Média calculada estritamente pelos Pontos Realizados (excluindo pendentes)
+        # Cálculo do Ganho por linha: Se houver valor na planilha, usa-o; senão, usa R$ 25,00 padrão.
+        valores_calculados = []
+        for _, row in df_calculo.iterrows():
+            is_realizado = (
+                not str(row.get("Status", "")).lower().startswith("pendente") and
+                pd.notna(row.get("Data_Visita", pd.NaT))
+            )
+            
+            if is_realizado:
+                # Verifica se a coluna de ganho existe e tem valor preenchido/válido (> 0)
+                ganho_planilha = 0.0
+                if coluna_ganho_alvo:
+                    ganho_planilha = limpar_moeda(row.get(coluna_ganho_alvo, 0))
+                
+                if ganho_planilha > 0:
+                    valores_calculados.append(ganho_planilha) # Usa o valor da planilha
+                else:
+                    valores_calculados.append(25.00) # Usa o padrão de R$ 25,00 se a planilha estiver vazia/zerada
+            else:
+                valores_calculados.append(0.0)
+
+        df_calculo["Ganho_Num"] = valores_calculados
+        total_ganho_filtrado = df_calculo["Ganho_Num"].sum()
+
         media_por_ponto = total_ganho_filtrado / total_pontos_realizados if total_pontos_realizados > 0 else 0.0
 
         m1, m2, m3 = st.columns(3)
@@ -386,7 +396,7 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
 
         st.markdown("---")
         st.subheader("📋 Detalhamento Financeiro dos Registos")
-        colunas_exibir = [c for c in ["Destinatário", "Bairro", "Status", "Data_Visita", coluna_ganho_alvo] if c and c in df_calculo.columns]
+        colunas_exibir = [c for c in ["Destinatário", "Bairro", "Status", "Data_Visita", "Ganho_Num"] if c in df_calculo.columns]
         st.dataframe(df_calculo[colunas_exibir], use_container_width=True, hide_index=True)
 
     else:

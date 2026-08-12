@@ -298,29 +298,52 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
         if "Data_Visita" in df_fin.columns:
             df_fin["Data_Visita"] = pd.to_datetime(df_fin["Data_Visita"], errors="coerce")
 
-        # Tratamento da coluna de Ganhos (remove símbolos de moeda se existirem e converte para float)
+        # Identificar coluna de ganho
         coluna_ganho_alvo = None
         for col in ["Ganho", "Ganhos", "Valor", "Preço"]:
             if col in df_fin.columns:
                 coluna_ganho_alvo = col
                 break
 
-        if coluna_ganho_alvo:
-            def limpar_moeda(val):
-                if pd.isna(val):
-                    return 0.0
-                if isinstance(val, (int, float)):
-                    return float(val)
-                val_str = str(val).replace("R$", "").replace("€", "").replace(".", "").replace(",", ".").strip()
-                try:
-                    return float(val_str)
-                except:
-                    return 0.0
+        # Função de limpeza robusta para tratar textos com "R$", números crus e vírgulas/pontos
+        def limpar_moeda(val):
+            if pd.isna(val):
+                return 0.0
+            if isinstance(val, (int, float)):
+                return float(val)
+            
+            val_str = str(val).strip()
+            if not val_str or val_str.lower() in ["nan", "none", ""]:
+                return 0.0
+                
+            # Remove símbolos de moeda e espaços extras
+            val_str = val_str.replace("R$", "").replace("€", "").strip()
+            
+            # Se contém vírgula, assume formato brasileiro com decimais
+            if "," in val_str:
+                val_str = val_str.replace(".", "").replace(",", ".")
+            
+            # Remove quaisquer caracteres restantes que não sejam números, pontos ou sinal de menos
+            val_str = re.sub(r"[^\d\.-]", "", val_str)
+            
+            try:
+                return float(val_str)
+            except ValueError:
+                return 0.0
 
+        if coluna_ganho_alvo:
             df_fin["Ganho_Num"] = df_fin[coluna_ganho_alvo].apply(limpar_moeda)
         else:
             df_fin["Ganho_Num"] = 0.0
-            st.warning("⚠️ Coluna de 'Ganho' ou equivalente não encontrada na planilha. Os valores financeiros mostrarão 0.")
+            st.warning("⚠️ Coluna de 'Ganho' não encontrada na planilha.")
+
+        # --- DIAGNÓSTICO VISUAL OPCIONAL (DEBUG) ---
+        with st.expander("🔍 Ver Diagnóstico de Dados Brutos (Debug)"):
+            st.write("Colunas detetadas:", df_fin.columns.tolist())
+            if coluna_ganho_alvo:
+                st.write("Amostra dos valores originais vs convertidos:", df_fin[[coluna_ganho_alvo, "Ganho_Num", "Status", "Data_Visita"]].head(10))
+            else:
+                st.write("Nenhuma coluna de ganho identificada.")
 
         st.markdown("### 📅 Filtros Financeiros")
         f_col1, f_col2 = st.columns([2, 2])
@@ -346,21 +369,20 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
             else:
                 intervalo_dt = None
 
-        # Aplicar filtros no dataframe financeiro
+        # Aplicar filtros
         if filtro_status_fin and "Status" in df_fin.columns:
             df_fin = df_fin[df_fin["Status"].isin(filtro_status_fin)]
 
         if intervalo_dt and len(intervalo_dt) == 2 and "Data_Visita" in df_fin.columns:
             d_ini, d_fim = intervalo_dt
             df_fin = df_fin[
-                (df_fin["Data_Visita"].dt.date >= d_ini) & 
-                (df_fin["Data_Visita"].dt.date <= d_fim) | 
+                ((df_fin["Data_Visita"].dt.date >= d_ini) & 
+                 (df_fin["Data_Visita"].dt.date <= d_fim)) | 
                 (df_fin["Data_Visita"].isna())
             ]
 
         st.markdown("---")
 
-        # Métricas Financeiras
         total_ganho_filtrado = df_fin["Ganho_Num"].sum()
         total_pontos_fin = len(df_fin)
         media_por_ponto = total_ganho_filtrado / total_pontos_fin if total_pontos_fin > 0 else 0.0

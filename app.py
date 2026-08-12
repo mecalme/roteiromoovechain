@@ -190,7 +190,41 @@ if opcao == "📊 Dashboard Principal":
                 showlegend=False
             )
             st.plotly_chart(fig_barras_status, use_container_width=True)
-
+        st.markdown("---")
+        st.subheader("🏘️ Distribuição de Status por Bairro (%)")
+        if "Bairro" in df_dados.columns and "Status" in df_dados.columns and not df_dados.empty:
+            # Agrupar por Bairro e Status para calcular as quantidades
+            df_bairro_status = df_dados.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
+            
+            # Calcular o total por bairro para obter a porcentagem relativa
+            totais_bairro = df_dados.groupby("Bairro").size().reset_index(name="Total_Bairro")
+            df_bairro_status = df_bairro_status.merge(totais_bairro, on="Bairro")
+            df_bairro_status["Percentual"] = (df_bairro_status["Quantidade"] / df_bairro_status["Total_Bairro"] * 100).round(1)
+            
+            fig_bairro = px.bar(
+                df_bairro_status,
+                x="Bairro",
+                y="Percentual",
+                color="Status",
+                barmode="stack", # Pode alterar para "group" se preferir barras separadas
+                text=df_bairro_status["Percentual"].apply(lambda x: f"{x}%" if x > 5 else ""),
+                color_discrete_map={
+                    "Auditado": "#22c55e",
+                    "Pendente": "#f59e0b",
+                    "Justificado": "#38bdf8",
+                    "Cancelada": "#ef4444"
+                }
+            )
+            fig_bairro.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#f1f5f9"),
+                xaxis=dict(title="Bairro", tickangle=-45),
+                yaxis=dict(title="Percentual (%)", range=[0, 100]),
+                margin=dict(l=10, r=10, t=30, b=10),
+                legend_title="Status"
+            )
+            st.plotly_chart(fig_bairro, use_container_width=True)
     else:
         st.info("A carregar dados do Google Sheets...")
 

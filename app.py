@@ -136,70 +136,18 @@ if opcao == "📊 Dashboard Principal":
         if "Data_Visita" in df_dados.columns:
             df_dados["Data_Visita"] = pd.to_datetime(df_dados["Data_Visita"], errors="coerce")
 
-        st.markdown("### 🔍 Filtros do Dashboard")
-        col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns([1, 1, 1, 1, 1.5])
-        
-        estados_disponiveis = sorted(df_dados["Estado"].dropna().unique().tolist()) if "Estado" in df_dados.columns else []
-        cidades_disponiveis = sorted(df_dados["Cidade"].dropna().unique().tolist()) if "Cidade" in df_dados.columns else []
-        bairros_disponiveis = sorted(df_dados["Bairro"].dropna().unique().tolist()) if "Bairro" in df_dados.columns else []
-        status_disponiveis = sorted(df_dados["Status"].dropna().unique().tolist()) if "Status" in df_dados.columns else ["Auditado", "Pendente", "Justificado", "Cancelada"]
-
-        with col_f1:
-            filtro_estado_dash = st.multiselect("Filtrar por Estado", estados_disponiveis, key="dash_estado_multi")
-        with col_f2:
-            filtro_cidade_dash = st.multiselect("Filtrar por Cidade", cidades_disponiveis, key="dash_cidade_multi")
-        with col_f3:
-            filtro_bairro_dash = st.multiselect("Filtrar por Bairro(s)", bairros_disponiveis, key="dash_bairro_multi")
-        with col_f4:
-            filtro_status_dash = st.multiselect("Filtrar por Status", status_disponiveis, key="dash_status_multi")
-        with col_f5:
-            st.markdown("**Período da Visita**")
-            if "Data_Visita" in df_dados.columns and not df_dados["Data_Visita"].dropna().empty:
-                min_data = df_dados["Data_Visita"].min().date()
-                max_data = df_dados["Data_Visita"].max().date()
-                intervalo_datas = st.date_input(
-                    "Selecione o intervalo",
-                    value=(min_data, max_data),
-                    min_value=min_data,
-                    max_value=max_data,
-                    key="dash_intervalo_datas",
-                    label_visibility="collapsed"
-                )
-            else:
-                intervalo_datas = None
-                st.info("Data indisponível.")
-
-        df_dash_view = df_dados.copy()
-        if filtro_estado_dash and "Estado" in df_dash_view.columns:
-            df_dash_view = df_dash_view[df_dash_view["Estado"].isin(filtro_estado_dash)]
-        if filtro_cidade_dash and "Cidade" in df_dash_view.columns:
-            df_dash_view = df_dash_view[df_dash_view["Cidade"].isin(filtro_cidade_dash)]
-        if filtro_bairro_dash and "Bairro" in df_dash_view.columns:
-            df_dash_view = df_dash_view[df_dash_view["Bairro"].isin(filtro_bairro_dash)]
-        if filtro_status_dash and "Status" in df_dash_view.columns:
-            condicao_status = df_dash_view["Status"].apply(lambda s: any(st_val.lower() in str(s).lower() for st_val in filtro_status_dash))
-            df_dash_view = df_dash_view[condicao_status]
-            
-        if intervalo_datas and len(intervalo_datas) == 2 and "Data_Visita" in df_dash_view.columns:
-            data_inicio, data_fim = intervalo_datas
-            condicao_data = (
-                (df_dash_view["Data_Visita"].dt.date >= data_inicio) & 
-                (df_dash_view["Data_Visita"].dt.date <= data_fim)
-            ) | (df_dash_view["Data_Visita"].isna())
-            df_dash_view = df_dash_view[condicao_data]
-
         st.markdown("---")
 
-        if "Status" in df_dash_view.columns:
-            total_auditorias = len(df_dash_view)
-            pendentes = len(df_dash_view[df_dash_view["Status"].str.contains("Pendente", case=False, na=False)])
-            justificadas = len(df_dash_view[df_dash_view["Status"].str.contains("Justificad", case=False, na=False)])
-            canceladas = len(df_dash_view[df_dash_view["Status"].str.contains("Cancelad", case=False, na=False)])
-            auditadas = len(df_dash_view[df_dash_view["Status"].str.contains("Auditado", case=False, na=False)])
+        if "Status" in df_dados.columns:
+            total_auditorias = len(df_dados)
+            pendentes = len(df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)])
+            justificadas = len(df_dados[df_dados["Status"].str.contains("Justificad", case=False, na=False)])
+            canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelad", case=False, na=False)])
+            auditadas = len(df_dados[df_dados["Status"].str.contains("Auditado", case=False, na=False)])
             
             progresso = int((auditadas / total_auditorias * 100)) if total_auditorias > 0 else 0
         else:
-            total_auditorias = len(df_dash_view)
+            total_auditorias = len(df_dados)
             pendentes, justificadas, canceladas, auditadas, progresso = 0, 0, 0, 0, 0
 
         col1, col2, col3, col4 = st.columns(4)
@@ -214,8 +162,8 @@ if opcao == "📊 Dashboard Principal":
         st.markdown("---")
 
         st.subheader("🥧 Distribuição Percentual dos Status")
-        if "Status" in df_dash_view.columns and not df_dash_view.empty:
-            df_status_counts = df_dash_view["Status"].value_counts().reset_index()
+        if "Status" in df_dados.columns and not df_dados.empty:
+            df_status_counts = df_dados["Status"].value_counts().reset_index()
             df_status_counts.columns = ["Status", "Quantidade"]
             
             fig_pizza = px.pie(
@@ -245,8 +193,8 @@ if opcao == "📊 Dashboard Principal":
 
         with col_left:
             st.subheader("📍 Status por Bairro")
-            if "Bairro" in df_dash_view.columns and "Status" in df_dash_view.columns:
-                df_bairro_status = df_dash_view.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
+            if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
+                df_bairro_status = df_dados.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
                 if not df_bairro_status.empty:
                     fig_bairro_status = px.bar(
                         df_bairro_status,
@@ -272,14 +220,14 @@ if opcao == "📊 Dashboard Principal":
 
         with col_right:
             st.subheader("📋 Top Bairros com Pendências")
-            if "Bairro" in df_dash_view.columns and "Status" in df_dash_view.columns:
-                df_pendentes = df_dash_view[df_dash_view["Status"].str.contains("Pendente", case=False, na=False)]
+            if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
+                df_pendentes = df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)]
                 if not df_pendentes.empty:
                     top_pendencias = df_pendentes["Bairro"].value_counts().reset_index()
                     top_pendencias.columns = ["Bairro", "Pendências"]
                     st.dataframe(top_pendencias.head(6), use_container_width=True, hide_index=True)
                 else:
-                    st.success("Nenhum ponto pendente nos critérios selecionados!")
+                    st.success("Nenhum ponto pendente!")
 
     else:
         st.info("A carregar dados do Google Sheets...")

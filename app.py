@@ -19,12 +19,10 @@ st.set_page_config(
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-# Estilo profissional aprimorado: cartões claros para máxima legibilidade
 st.markdown("""
     <style>
     .main { background-color: #0f1117; color: #f1f5f9; }
     
-    /* Cartões de Métricas com fundo claro e alto contraste */
     .stMetric { 
         background-color: #ffffff !important; 
         padding: 18px !important; 
@@ -84,7 +82,6 @@ def carregar_dados_cache(versao):
         st.error(f"Erro ao ligar ao Google Sheets: {e}")
         return pd.DataFrame()
 
-# Passamos a versão atual da sessão para obrigar a recarregar se houver alteração
 df_dados = carregar_dados_cache(st.session_state["versao_dados"])
 
 # --- 4. BARRA LATERAL (MENU E AUTENTICAÇÃO) ---
@@ -123,7 +120,6 @@ else:
 
 opcao = st.sidebar.radio("Ir para:", lista_menu)
 
-# Exibição global de mensagem de sucesso persistente, se houver
 if st.session_state["mensagem_sucesso"]:
     st.success(st.session_state["mensagem_sucesso"])
     st.session_state["mensagem_sucesso"] = ""
@@ -135,7 +131,8 @@ if opcao == "📊 Dashboard Principal":
     
     if not df_dados.empty:
         if "Data_Visita" in df_dados.columns:
-            df_dados["Data_Visita"] = pd.to_datetime(df_dados["Data_Visita"], errors="coerce")
+            # dayfirst=True garante a leitura correta de datas brasileiras (DD/MM/AAAA)
+            df_dados["Data_Visita"] = pd.to_datetime(df_dados["Data_Visita"], dayfirst=True, errors="coerce")
 
         st.markdown("---")
 
@@ -193,47 +190,6 @@ if opcao == "📊 Dashboard Principal":
                 showlegend=False
             )
             st.plotly_chart(fig_barras_status, use_container_width=True)
-
-        st.markdown("---")
-        col_left, col_right = st.columns([2, 1])
-
-        with col_left:
-            st.subheader("📍 Status por Bairro")
-            if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
-                df_bairro_status = df_dados.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
-                if not df_bairro_status.empty:
-                    fig_bairro_status = px.bar(
-                        df_bairro_status,
-                        x="Bairro",
-                        y="Quantidade",
-                        color="Status",
-                        barmode="stack",
-                        color_discrete_map={
-                            "Auditado": "#22c55e",
-                            "Pendente": "#f59e0b",
-                            "Justificado": "#38bdf8",
-                            "Cancelada": "#ef4444"
-                        }
-                    )
-                    fig_bairro_status.update_layout(
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#f1f5f9"),
-                        xaxis_tickangle=-45,
-                        margin=dict(l=10, r=10, t=10, b=10)
-                    )
-                    st.plotly_chart(fig_bairro_status, use_container_width=True)
-
-        with col_right:
-            st.subheader("📋 Top Bairros com Pendências")
-            if "Bairro" in df_dados.columns and "Status" in df_dados.columns:
-                df_pendentes = df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)]
-                if not df_pendentes.empty:
-                    top_pendencias = df_pendentes["Bairro"].value_counts().reset_index()
-                    top_pendencias.columns = ["Bairro", "Pendências"]
-                    st.dataframe(top_pendencias.head(6), use_container_width=True, hide_index=True)
-                else:
-                    st.success("Nenhum ponto pendente!")
 
     else:
         st.info("A carregar dados do Google Sheets...")
@@ -294,7 +250,7 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
     if not df_dados.empty:
         df_fin = df_dados.copy()
         
-        # Converter coluna de data para datetime
+        # Converte data respeitando o formato brasileiro (dia/mês/ano)
         if "Data_Visita" in df_fin.columns:
             df_fin["Data_Visita"] = pd.to_datetime(df_fin["Data_Visita"], dayfirst=True, errors="coerce")
 
@@ -305,7 +261,6 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
                 coluna_ganho_alvo = col
                 break
 
-        # Função de limpeza robusta para tratar textos com "R$", números crus e vírgulas/pontos
         def limpar_moeda(val):
             if pd.isna(val):
                 return 0.0
@@ -316,14 +271,11 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
             if not val_str or val_str.lower() in ["nan", "none", ""]:
                 return 0.0
                 
-            # Remove símbolos de moeda e espaços extras
             val_str = val_str.replace("R$", "").replace("€", "").strip()
             
-            # Se contém vírgula, assume formato brasileiro com decimais
             if "," in val_str:
                 val_str = val_str.replace(".", "").replace(",", ".")
             
-            # Remove quaisquer caracteres restantes que não sejam números, pontos ou sinal de menos
             val_str = re.sub(r"[^\d\.-]", "", val_str)
             
             try:
@@ -336,14 +288,6 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
         else:
             df_fin["Ganho_Num"] = 0.0
             st.warning("⚠️ Coluna de 'Ganho' não encontrada na planilha.")
-
-        # --- DIAGNÓSTICO VISUAL OPCIONAL (DEBUG) ---
-        with st.expander("🔍 Ver Diagnóstico de Dados Brutos (Debug)"):
-            st.write("Colunas detetadas:", df_fin.columns.tolist())
-            if coluna_ganho_alvo:
-                st.write("Amostra dos valores originais vs convertidos:", df_fin[[coluna_ganho_alvo, "Ganho_Num", "Status", "Data_Visita"]].head(10))
-            else:
-                st.write("Nenhuma coluna de ganho identificada.")
 
         st.markdown("### 📅 Filtros Financeiros")
         f_col1, f_col2 = st.columns([2, 2])
@@ -456,7 +400,6 @@ elif opcao == "➕ Adicionar Novo Registro" and st.session_state["autenticado"]:
                 sheet = client.open("Roteiro MooveChain Florianóplis 2026").sheet1
                 sheet.append_row([destinatario, rua, numero, bairro, cidade, estado, cep, "", status_reg, "", "", ""])
                 
-                # Invalidação forçada do cache atualizando a versão na sessão
                 st.cache_data.clear()
                 st.session_state["versao_dados"] += 1
                 
@@ -478,7 +421,6 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
         bairros_disponiveis = sorted(df_dados["Bairro"].dropna().unique().tolist()) if "Bairro" in df_dados.columns else []
         status_disponiveis = sorted(df_dados["Status"].dropna().unique().tolist()) if "Status" in df_dados.columns else []
         
-        # Filtrar valores salvos na sessão para conter apenas opções existentes
         st.session_state["filtro_estado"] = [x for x in st.session_state["filtro_estado"] if x in estados_disponiveis]
         st.session_state["filtro_cidade"] = [x for x in st.session_state["filtro_cidade"] if x in cidades_disponiveis]
         st.session_state["filtro_bairro"] = [x for x in st.session_state["filtro_bairro"] if x in bairros_disponiveis]
@@ -568,7 +510,6 @@ elif opcao == "📋 Tabela de Dados e Ações" and st.session_state["autenticado
                         range_celulas = gspread.utils.rowcol_to_a1(linha_planilha, 1) + ":" + gspread.utils.rowcol_to_a1(linha_planilha, num_colunas)
                         sheet.update(range_celulas, [valores_linha])
                     
-                    # Invalidação forçada do cache incrementando a versão e limpando a cache nativa
                     st.cache_data.clear()
                     st.session_state["versao_dados"] += 1
                     

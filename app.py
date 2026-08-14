@@ -193,10 +193,8 @@ if opcao == "📊 Dashboard Principal":
         st.markdown("---")
         st.subheader("🏘️ Distribuição de Status por Bairro (%)")
         if "Bairro" in df_dados.columns and "Status" in df_dados.columns and not df_dados.empty:
-            # Agrupar por Bairro e Status para calcular as quantidades
             df_bairro_status = df_dados.groupby(["Bairro", "Status"]).size().reset_index(name="Quantidade")
             
-            # Calcular o total por bairro para obter a porcentagem relativa
             totais_bairro = df_dados.groupby("Bairro").size().reset_index(name="Total_Bairro")
             df_bairro_status = df_bairro_status.merge(totais_bairro, on="Bairro")
             df_bairro_status["Percentual"] = (df_bairro_status["Quantidade"] / df_bairro_status["Total_Bairro"] * 100).round(1)
@@ -206,7 +204,7 @@ if opcao == "📊 Dashboard Principal":
                 x="Bairro",
                 y="Percentual",
                 color="Status",
-                barmode="stack", # Pode alterar para "group" se preferir barras separadas
+                barmode="stack",
                 text=df_bairro_status["Percentual"].apply(lambda x: f"{x}%" if x > 5 else ""),
                 color_discrete_map={
                     "Auditado": "#22c55e",
@@ -273,7 +271,8 @@ elif opcao == "🗺️ Mapa Interativo":
             except Exception:
                 continue
                 
-        st_folium(m, width=1200, height=500)
+        # Adicionado key dinâmica baseada na versão dos dados para forçar a re-renderização imediata
+        st_folium(m, width=1200, height=500, key=f"mapa_interativo_{st.session_state['versao_dados']}")
     else:
         st.warning("Coordenadas não disponíveis para exibir o mapa.")
 
@@ -287,7 +286,6 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
         if "Data_Visita" in df_fin.columns:
             df_fin["Data_Visita"] = pd.to_datetime(df_fin["Data_Visita"], dayfirst=True, errors="coerce")
 
-        # Identificar coluna de ganho na planilha
         coluna_ganho_alvo = None
         for col in ["Ganho", "Ganhos", "Valor", "Preço"]:
             if col in df_fin.columns:
@@ -341,12 +339,10 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
             else:
                 intervalo_dt = None
 
-        # Aplicar filtros de status selecionados
         df_calculo = df_fin.copy()
         if filtro_status_fin and "Status" in df_calculo.columns:
             df_calculo = df_calculo[df_calculo["Status"].isin(filtro_status_fin)]
 
-        # Aplicar intervalo de datas inicial para filtragem do cálculo
         if intervalo_dt and len(intervalo_dt) == 2 and "Data_Visita" in df_calculo.columns:
             d_ini, d_fim = intervalo_dt
             df_calculo = df_calculo[
@@ -357,7 +353,6 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
 
         st.markdown("---")
 
-        # Cálculo do Ganho por linha (Usa valor da planilha se existir, senão R$ 25,00)
         valores_calculados = []
         for _, row in df_calculo.iterrows():
             is_realizado = (
@@ -379,7 +374,6 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
 
         df_calculo["Ganho_Num"] = valores_calculados
 
-        # Filtrar estritamente o DataFrame final pelo intervalo de datas ativas para exibição na tabela
         if intervalo_dt and len(intervalo_dt) == 2 and "Data_Visita" in df_calculo.columns:
             d_ini, d_fim = intervalo_dt
             df_calculo = df_calculo[
@@ -387,7 +381,6 @@ elif opcao == "💰 Dashboard Financeiro" and st.session_state["autenticado"]:
                 (df_calculo["Data_Visita"].dt.date <= d_fim)
             ]
 
-        # Recalcular métricas baseadas estritamente nas linhas visíveis da tabela
         mask_realizados_filtrados = (
             ~df_calculo["Status"].str.contains("Pendente", case=False, na=False) &
             df_calculo["Data_Visita"].notna()

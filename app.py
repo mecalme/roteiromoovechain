@@ -173,10 +173,10 @@ if opcao == "📊 Dashboard Principal":
                 text=df_status_counts.apply(lambda r: f"{r['Quantidade']} ({r['Percentual']}%)", axis=1),
                 color="Status",
                 color_discrete_map={
-                    "Auditado": "#22c55e",
-                    "Pendente": "#f59e0b",
-                    "Justificado": "#38bdf8",
-                    "Cancelada": "#ef4444"
+                    "Auditado": "#18eb05",
+                    "Pendente": "#09b2e6",
+                    "Justificado": "#ee0808",
+                    "Cancelada": "#030303"
                 }
             )
             fig_barras_status.update_traces(textposition="outside", textfont_size=13)
@@ -207,10 +207,10 @@ if opcao == "📊 Dashboard Principal":
                 barmode="stack",
                 text=df_bairro_status["Percentual"].apply(lambda x: f"{x}%" if x > 5 else ""),
                 color_discrete_map={
-                    "Auditado": "#22c55e",
-                    "Pendente": "#f59e0b",
-                    "Justificado": "#38bdf8",
-                    "Cancelada": "#ef4444"
+                    "Auditado": "#18eb05",
+                    "Pendente": "#09b2e6",
+                    "Justificado": "#ee0808",
+                    "Cancelada": "#030303"
                 }
             )
             fig_bairro.update_layout(

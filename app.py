@@ -140,7 +140,7 @@ if opcao == "📊 Dashboard Principal":
             total_auditorias = len(df_dados)
             pendentes = len(df_dados[df_dados["Status"].str.contains("Pendente", case=False, na=False)])
             justificadas = len(df_dados[df_dados["Status"].str.contains("Justificado", case=False, na=False)])
-            canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelad", case=False, na=False)])
+            canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelado", case=False, na=False)])
             auditadas = len(df_dados[df_dados["Status"].str.contains("Auditado", case=False, na=False)])
             
             progresso = int((auditadas / total_auditorias * 100)) if total_auditorias > 0 else 0

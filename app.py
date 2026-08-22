@@ -143,7 +143,9 @@ if opcao == "📊 Dashboard Principal":
             canceladas = len(df_dados[df_dados["Status"].str.contains("Cancelado", case=False, na=False)])
             auditadas = len(df_dados[df_dados["Status"].str.contains("Auditado", case=False, na=False)])
             
-            progresso = int((auditadas / total_auditorias * 100)) if total_auditorias > 0 else 0
+            # Inclui Auditados, Justificados e Cancelados no cálculo do progresso
+            itens_concluidos = auditadas + justificadas + canceladas
+            progresso = int((itens_concluidos / total_auditorias * 100)) if total_auditorias > 0 else 0
         else:
             total_auditorias = len(df_dados)
             pendentes, justificadas, canceladas, auditadas, progresso = 0, 0, 0, 0, 0
@@ -155,7 +157,7 @@ if opcao == "📊 Dashboard Principal":
         col4.metric("Justificados", justificadas)
         
         st.markdown("### Progresso da Auditoria")
-        st.progress(progresso / 100, text=f"Conclusão: {progresso}%")
+        st.progress(progresso / 100, text=f"Conclusão (Auditados + Justificados + Cancelados): {progresso}%")
         
         st.markdown("---")
 
@@ -271,7 +273,6 @@ elif opcao == "🗺️ Mapa Interativo":
             except Exception:
                 continue
                 
-        # Adicionado key dinâmica baseada na versão dos dados para forçar a re-renderização imediata
         st_folium(m, width=1200, height=500, key=f"mapa_interativo_{st.session_state['versao_dados']}")
     else:
         st.warning("Coordenadas não disponíveis para exibir o mapa.")

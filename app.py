@@ -59,7 +59,7 @@ if "filtro_status" not in st.session_state:
 if "mensagem_sucesso" not in st.session_state:
     st.session_state["mensagem_sucesso"] = ""
 
-# --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS COM CONTROLO DE VERSÃO ---
+# --- 3. FUNÇÃO DE CARREGAMENTO DE DADOS COM CONTROLE DE VERSÃO ---
 @st.cache_data(ttl=60)
 def carregar_dados_cache(versao):
     try:
@@ -178,7 +178,7 @@ if opcao == "📊 Dashboard Principal":
                     "Auditado": "#18eb05",
                     "Pendente": "#09b2e6",
                     "Justificado": "#ee0808",
-                    "Cancelada": "#030303"
+                    "Cancelado": "#030303"
                 }
             )
             fig_barras_status.update_traces(textposition="outside", textfont_size=13)
@@ -212,7 +212,7 @@ if opcao == "📊 Dashboard Principal":
                     "Auditado": "#18eb05",
                     "Pendente": "#09b2e6",
                     "Justificado": "#ee0808",
-                    "Cancelada": "#030303"
+                    "Cancelado": "#030303"
                 }
             )
             fig_bairro.update_layout(
